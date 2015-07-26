@@ -1,10 +1,8 @@
 # Paths for Linux CUDA
-ICUDA    = /usr/local/cuda-6.5/include
-LCUDA    = /usr/local/cuda-6.5/lib64
-ICUDA_MAC = /Developer/NVIDIA/CUDA-6.5/include
-LCUDA_MAC = /Developer/NVIDIA/CUDA-6.5/lib
-ICPP_MAC = /usr/local/include
-LCPP_MAC = /usr/local/lib
+ICUDA    = /usr/local/cuda-7.0/include
+LCUDA    = /usr/local/cuda-7.0/lib64
+ICUDA_MAC = /Developer/NVIDIA/CUDA-7.0/include
+LCUDA_MAC = /Developer/NVIDIA/CUDA-7.0/lib
 ILAPACK = /usr/include/lapacke
 
 SDIR     = .
@@ -12,7 +10,7 @@ IDIR     = .
 LDIR     = .
 
 # Compiler for CUDA
-NVCC      = /Developer/NVIDIA/CUDA-6.5/bin/nvcc
+NVCC      = nvcc
 
 # CUDA compiling options
 NVCCFLAGS =  -arch sm_30 #-use_fast_math
@@ -21,23 +19,23 @@ NVCCFLAGS =  -arch sm_30 #-use_fast_math
 CXX       = g++
 
 # Standard optimization flags to C++ compiler
-CXXFLAGS  = -O2 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
+CXXFLAGS  = -O3 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
 
 # Add CUDA libraries to C++ compiler linking process
-LDFLAGS  += -lcublas -lcurand -lcudart -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
+LDFLAGS  += -v -lstdc++ -lcublas -lcurand -lcudart -std=c++11 -L$(LCUDA) -L$(LCUDA_MAC)
 
 # List Executables and Objects
-EXEC = vfi 
+EXEC = vfi
 
 all : $(EXEC)
 
 # Link objects from CUDA and C++ codes
 vfi : vfi.o
-	$(CXX) -o $@ $? $(LDFLAGS)
+	$(NVCC) -o $@ $? $(LDFLAGS)
 
 # Compile CUDA code
-vfi.o : vfi.cu 
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -c $<  
+vfi.o : vfi.cu
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -c $<
 
 clean :
 	rm -f *.o

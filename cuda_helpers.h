@@ -2,6 +2,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include "common.h"
 
 // Tauchen's method
 __host__ __device__
@@ -13,12 +14,12 @@ void tauchen(double rrho, double ssigma, double * Z, double * P) {
 	for (int i = 2; i <= nzgrid-1; i++) {
 		Z[i-1] = Z[i-2] + step;
 	};
-    
+
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
 	    P[i_z] = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
 	    P[i_z + nzgrid*(nzgrid-1)] = 1 - normcdf( (Z[nzgrid-1]-rrho*Z[i_z]-step/2)/ssigma  );
 	};
-    
+
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
 	    for (int i_zplus = 1; i_zplus <= nzgrid-2; ++i_zplus) {
             P[i_z+nzgrid*i_zplus] = normcdf( (Z[i_zplus]-rrho*Z[i_z]+step/2)/ssigma  )-normcdf( (Z[i_zplus]-rrho*Z[i_z]-step/2)/ssigma  );
@@ -71,7 +72,7 @@ void ind2sub(int length_size, int* siz_vec, int index, int* subs) {
 			cumdim *= siz_vec[j];
 		};
 		int temp_sub = (index - done)/cumdim;
-		subs[i] = temp_sub; 
+		subs[i] = temp_sub;
 		done += temp_sub*cumdim;
 	};
 };
@@ -138,7 +139,7 @@ int fit2grid(const double x, const T X) {
 
 ////////////////////////////////////////
 //
-/// Utilities for Vector 
+/// Utilities for Vector
 //
 ////////////////////////////////////////
 __host__ __device__
@@ -203,7 +204,7 @@ void load_vec(T& vec, int size, std::string filename ) {
 	std::cout << "Loading from " << filename << std::endl;
 	std::ifstream filein(filename.c_str());
 	for (int i = 0; i < size; i++) {
-		filein >> vec[i]; 
+		filein >> vec[i];
 	};
 	filein.close();
 	std::cout << "Done!" << std::endl;
@@ -228,7 +229,7 @@ void load_vec(T& vec, std::string filename ) {
 };
 
 ////////////////////////////////////////
-// 
+//
 // Nonlinear Equation Solver
 //
 ////////////////////////////////////////
@@ -253,7 +254,7 @@ double newton_bracket(T func, const double x1, const double x2, double x0) {
 	double xl, xh;
 	if (f1 < 0.0) {
 		xl = x1;
-		xh = x2; 
+		xh = x2;
 	} else {
 		xh = x1;
 		xl = x2;
@@ -266,8 +267,8 @@ double newton_bracket(T func, const double x1, const double x2, double x0) {
 	double f = func(rts);
 	double df = func.prime(rts);
 
-	for (int iter = 0; iter < newton_maxiter; iter++) { 
-		if ( 
+	for (int iter = 0; iter < newton_maxiter; iter++) {
+		if (
 			( ((rts-xh)*df-f)*((rts-xl)*df-f) > 0.0 )   ||	// Bisect if Newton step out of range
 			( abs(2.0*f) > abs(dxold*df)  ) // ... or step not decreasing fast enough
 		   )
@@ -278,7 +279,7 @@ double newton_bracket(T func, const double x1, const double x2, double x0) {
 			rts = xl + dx;
 			if (xl == rts) return rts;
 		} else {
-			// If newton step is okay 
+			// If newton step is okay
 			dxold = dx;
 			dx = f/df;
 			double temp = rts;
@@ -320,7 +321,7 @@ double newton(T func, const double x1, const double x2, double x0) {
 	double f2 = func(x2);
 	if (f1==0) return x1;
 	if (f2==0) return x2;
-	for (int iter = 0; iter < newton_maxiter; iter++) { 
+	for (int iter = 0; iter < newton_maxiter; iter++) {
 		x = x_old - func(x)/func.prime(x);
 
 		// Pull back if outside of support
@@ -342,7 +343,7 @@ double newton(T func, const double x1, const double x2, double x0) {
 };
 
 ////////////////////////////////////////
-// 
+//
 // Chebyshev Toolset
 //
 ////////////////////////////////////////
@@ -359,7 +360,7 @@ double chebypoly(const int p, const double x) {
 		case 3:
 			return 4*x*x*x - 3*x;
 	}
-	
+
 	// When p>=4, apply the recurrence relation
 	double lag1 = 4*x*x*x -3*x;
 	double lag2 = 2*x*x - 1;
@@ -395,12 +396,12 @@ double chebyeval(int p, double x, double* coeff) {
 	// Note that coefficient vector has p+1 values
 	double sum = 0;
 	for (int i=0; i<=p; i++) {
-		sum += coeff[i]*chebypoly(i,x);	
+		sum += coeff[i]*chebypoly(i,x);
 	};
 	return sum;
 };
 
-// Eval multi-dimensional Chebyshev tensor basis 
+// Eval multi-dimensional Chebyshev tensor basis
 // y = sum T_pi(x_i), i = 1,2,...p
 __host__ __device__
 double chebyeval_multi (const int n_var, double* x, int* size_vec,int* temp_subs, double* coeff) {

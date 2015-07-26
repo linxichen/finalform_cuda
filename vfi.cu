@@ -1,4 +1,4 @@
-#define nk 25000
+#define nk 2500
 #define nz 23
 #define tol 1e-7
 #define maxiter 2500
@@ -21,20 +21,21 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
-// Includes, cuda 
+// Includes, cuda
 #include <cublas_v2.h>
 #include "cuda_helpers.h"
+
+// Includes, my own creation
+#include "common.h"
 
 // Includes model stuff
 #include "rbcmodel.h"
 
-using namespace std;
-using namespace thrust;
 
 /// This function finds the value of RHS given k', k, z
 __host__ __device__
 double rhsvalue (state s, int i_z, double kplus, int i_kplus, double* EV, para p) {
-    return log(s.z*pow(s.k,p.ttheta)+(1-p.ddelta)*s.k-kplus) + p.bbeta*EV[i_kplus+i_z*nk];
+	return log(s.z*pow(s.k,p.ttheta)+(1-p.ddelta)*s.k-kplus) + p.bbeta*EV[i_kplus+i_z*nk];
 };
 
 // This find the max using binary search and assumes concavity
@@ -69,7 +70,7 @@ void concavemax(double k, double z, const int left_ind, const int right_ind, con
 			if (value1 < value3) {
 				Vplus[index] = value3;
 				koptind[index] = right_ind;
-			} else { 
+			} else {
 				Vplus[index] = value1;
 				koptind[index] = left_ind;
 			}
@@ -107,7 +108,7 @@ void concavemax(double k, double z, const int left_ind, const int right_ind, con
 			if (value1 < value3) {
 				Vplus[index] = value3;
 				koptind[index] = ind4;
-			} else { 
+			} else {
 				Vplus[index] = value1;
 				koptind[index] = ind1;
 			}
@@ -148,18 +149,18 @@ struct kplusVplusopt
 
 		// Exploit concavity to update V
 		concavemax(k, z, 0, nk-1, i_k, i_z, K, EV, koptind, Vplus, p);
-        
+
 	};
 };
 
-// This functor calculates the distance 
+// This functor calculates the distance
 struct myDist {
 	// Tuple is (V1low,Vplus1low,V1high,Vplus1high,...)
 	template <typename Tuple>
-	__host__ __device__
+		__host__ __device__
 	double operator()(Tuple t)
 	{
-		return abs(get<0>(t)-get<1>(t));
+		return abs(thrust::get<0>(t)-thrust::get<1>(t));
 	}
 };
 
@@ -177,9 +178,9 @@ int main(int argc, char ** argv)
 	p.std_epsz = 0.0045*0.0045;
 	p.complete(); // complete all implied para, find S-S
 
-	cout << setprecision(16) << "kss: " << p.kss << endl;
-	cout << setprecision(16) << "zss: " << p.zbar << endl;
-	cout << setprecision(16) << "tol: " << tol << endl;
+	std::cout << std::setprecision(16) << "kss: " << p.kss << std::endl;
+	std::cout << std::setprecision(16) << "zss: " << p.zbar << std::endl;
+	std::cout << std::setprecision(16) << "tol: " << tol << std::endl;
 
 	// Select Device
 	// int num_devices;
@@ -193,39 +194,39 @@ int main(int argc, char ** argv)
 	const double beta = 0.0;
 
 	// Create all STATE, SHOCK grids here
-	host_vector<double> h_K(nk); 
-	host_vector<double> h_Z(nz);
-    host_vector<double> h_logZ(nz);
-	host_vector<double> h_V(nk*nz,0.0);
-	host_vector<double> h_Vplus(nk*nz,0);
-	host_vector<int> h_koptind(nk*nz);
-	host_vector<double> h_EV(nk*nz,0.0);
-	host_vector<double> h_P(nz*nz, 0);
+	h_vec_d h_K(nk);
+	h_vec_d h_Z(nz);
+    h_vec_d h_logZ(nz);
+	h_vec_d h_V(nk*nz,0.0);
+	h_vec_d h_Vplus(nk*nz,0);
+	h_vec_i h_koptind(nk*nz);
+	h_vec_d h_EV(nk*nz,0.0);
+	h_vec_d h_P(nz*nz, 0);
 
     load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
 	double minK = 1.0/kwidth*p.kss;
 	double maxK = kwidth*p.kss;
-	linspace(minK,maxK,nk,raw_pointer_cast(h_K.data())); // in #include "cuda_helpers.h"
+	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_K.data())); // in #include "cuda_helpers.h"
 
 	// Create shocks grids
-	host_vector<double> h_shockgrids(nz);
-	double* h_logZ_ptr = raw_pointer_cast(h_logZ.data());
-	double* h_P_ptr = raw_pointer_cast(h_P.data());
+	h_vec_d h_shockgrids(nz);
+	double* h_logZ_ptr = thrust::raw_pointer_cast(h_logZ.data());
+	double* h_P_ptr = thrust::raw_pointer_cast(h_P.data());
     	tauchen(p.rrhozz, p.std_epsz, h_logZ_ptr, h_P_ptr); // in #include "cuda_helpers.h"
 	for (int i_shock = 0; i_shock < nz; i_shock++) {
 		h_Z[i_shock] = p.zbar*exp(h_logZ[i_shock]);
 	};
 
 	// Copy to the device
-	device_vector<double> d_K = h_K;
-	device_vector<double> d_Z = h_Z;
-	device_vector<double> d_V = h_V;
-	device_vector<double> d_Vplus = h_Vplus;
-	device_vector<int> d_koptind = h_koptind;
-	device_vector<double> d_EV = h_EV;
-	device_vector<double> d_P = h_P;
+	d_vec_d d_K = h_K;
+	d_vec_d d_Z = h_Z;
+	d_vec_d d_V = h_V;
+	d_vec_d d_Vplus = h_Vplus;
+	d_vec_i d_koptind = h_koptind;
+	d_vec_d d_EV = h_EV;
+	d_vec_d d_P = h_P;
 
 	// Obtain device pointers to be used by cuBLAS
 	double* d_K_ptr = raw_pointer_cast(d_K.data());
@@ -237,8 +238,8 @@ int main(int argc, char ** argv)
 	double* d_P_ptr = raw_pointer_cast(d_P.data());
 
 	// Firstly a virtual index array from 0 to nk*nk*nz
-	counting_iterator<int> begin(0);
-	counting_iterator<int> end(nk*nz);
+	thrust::counting_iterator<int> begin(0);
+	thrust::counting_iterator<int> end(nk*nz);
 
     // Create Timer
 	cudaEvent_t start, stop;
@@ -246,30 +247,30 @@ int main(int argc, char ** argv)
 	cudaEventCreate(&stop);
     // Start Timer
 	cudaEventRecord(start,NULL);
-	
+
 	// Step.1 Has to start with this command to create a handle
 	cublasHandle_t handle;
 
 	// Step.2 Initialize a cuBLAS context using Create function,
 	// and has to be destroyed later
 	cublasCreate(&handle);
-	
+
 	double diff = 10;  int iter = 0;
 	while ((diff>tol)&&(iter<maxiter)){
-		// Find EMs for low and high 
+		// Find EMs for low and high
 		cublasDgemm(handle,
-			CUBLAS_OP_N,  
+			CUBLAS_OP_N,
 			CUBLAS_OP_T,
 			nk, nz, nz,
 			&alpha,
-			d_V_ptr, 
-			nk, 
+			d_V_ptr,
+			nk,
 			d_P_ptr,
 			nz,
 			&beta,
 			d_EV_ptr,
 			nk);
-        
+
 		// Directly find the new Value function
 		thrust::for_each(
 			begin,
@@ -277,24 +278,24 @@ int main(int argc, char ** argv)
 			kplusVplusopt(d_K_ptr, d_Z_ptr, d_EV_ptr, d_koptind_ptr, d_Vplus_ptr, p)
                          );
 
-		// Find diff 
-		diff = transform_reduce(
-			make_zip_iterator(make_tuple(d_V.begin(),d_Vplus.begin())),
-			make_zip_iterator(make_tuple(d_V.end()  ,d_Vplus.end())),
+		// Find diff
+		diff = thrust::transform_reduce(
+			thrust::make_zip_iterator(thrust::make_tuple(d_V.begin(),d_Vplus.begin())),
+			thrust::make_zip_iterator(thrust::make_tuple(d_V.end()  ,d_Vplus.end())),
 			myDist(),
 			0.0,
-			maximum<double>()
+			thrust::maximum<double>()
 			);
 
 // maximum in #include <thrust/extrema.h>
 
-		cout << "diff is: "<< diff << endl;
+		std::cout << "diff is: "<< diff << std::endl;
 
 		// update correspondence
 		d_V = d_Vplus;
 
-		cout << ++iter << endl;
-		cout << "=====================" << endl;
+		std::cout << ++iter << std::endl;
+		std::cout << "=====================" << std::endl;
 
 	};
 
@@ -310,7 +311,7 @@ int main(int argc, char ** argv)
 
 	// Compute and print the performance
 	float msecPerMatrixMul = msecTotal;
-	cout << "Time= " << msecPerMatrixMul << " msec, iter= " << iter << endl;
+	std::cout << "Time= " << msecPerMatrixMul << " msec, iter= " << iter << std::endl;
 
 	// Copy back to host and print to file
 	h_V = d_V;
@@ -321,7 +322,7 @@ int main(int argc, char ** argv)
 	save_vec(h_Z,"./results/Zgrid.csv"); // in #include "cuda_helpers.h"
 	save_vec(h_P,"./results/Pgrid.csv"); // in #include "cuda_helpers.h"
 	save_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
-	cout << "Policy functions output completed." << endl;
+	std::cout << "Policy functions output completed." << std::endl;
 
 	// Export parameters to MATLAB
 	p.exportmatlab("./MATLAB/vfi_para.m");
