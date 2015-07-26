@@ -31,7 +31,6 @@
 // Includes model stuff
 #include "rbcmodel.h"
 
-
 /// This function finds the value of RHS given k', k, z
 __host__ __device__
 double rhsvalue (state s, int i_z, double kplus, int i_kplus, double* EV, para p) {
@@ -257,7 +256,7 @@ int main(int argc, char ** argv)
 
 	double diff = 10;  int iter = 0;
 	while ((diff>tol)&&(iter<maxiter)){
-		// Find EMs for low and high
+		// Find EV = V*tran(P)
 		cublasDgemm(handle,
 			CUBLAS_OP_N,
 			CUBLAS_OP_T,
