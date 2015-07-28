@@ -51,40 +51,63 @@ double rhsvalue (state s, int i_z, double kplus, int i_kplus, double* EV, para p
 struct updateprofit
 {
 	// Data member
-	double *k_grid, *K_grid, *Z;
-	int *koptind;
-    double *Vplus;
+	double *profit, *k_grid, *K_grid, *x_grid, *z_grid, *ssigmax_grid;
 	para p;
 	aggrules r;
 
 	// Construct this object, create util from _util, etc.
 	__host__ __device__
-    updateprofit(double* K_ptr, double* Z_ptr, double* EV_ptr, int* koptind_ptr, double* Vplus_ptr, para _p) {
-		K = K_ptr; Z = Z_ptr; EV = EV_ptr;
-		koptind = koptind_ptr; Vplus = Vplus_ptr;
-		p = _p;
+	updateprofit(
+		double* profit_ptr,
+		double* k_grid_ptr,
+		double* K_grid_ptr,
+		double* x_grid_ptr,
+		double* z_grid_ptr,
+		double* ssigmax_grid_ptr,
+		para _p,
+		aggrules _r
+	) {
+		profit       = profit_ptr;
+		k_grid       = k_grid_ptr;
+		x_grid       = x_grid_ptr;
+		z_grid       = z_grid_ptr;
+		ssigmax_grid = ssigmax_grid_ptr;
+		p            = _p;
+		r            = _r;
 	};
 
 	__host__ __device__
 	void operator()(int index) {
 		// Perform ind2sub
-		int subs[4];
-		int size_vec[4];
+		int subs[3];
+		int size_vec[3];
 		size_vec[0] = nk;
 		size_vec[1] = ns;
 		size_vec[2] = nK;
-		size_vec[3] = nq;
-		ind2sub(4,size_vec,index,subs);
+		ind2sub(3,size_vec,index,subs);
 		int i_k = subs[0];
 		int i_s = subs[1];
 		int i_K = subs[2];
-		int i_q = subs[3];
 
-		// 
+		// Find aggregate stuff
+		double k = k_grid[i_k];
+		double K = K_grid[i_K];
+		size_vec[0] = nx;
+		size_vec[1] = nz;
+		size_vec[2] = nssigmax;
+		ind2sub(3,size_vec,i_s,subs);
+		int i_x       = subs[0];
+		int i_z       = subs[1];
+		int i_ssigmax = subs[2];
+		double x       = x_grid[i_x];
+		double z       = z_grid[i_z];
+		double ssigmax = ssigmax_grid[i_ssigmax];
+		double C = exp( r.pphi_CC + r.pphi_CK*log(K) + r.pphi_Cz*log(z) + r.pphi_Cssigmax*log(ssigmax)  );
+		double w = p.ppsi_n*C;
 
-
-		// Exploit concavity to update V
-
+		// Find profit finally
+		double l = pow(w/z/x/p.v/pow(k,p.aalpha),1.0/(p.v-1));
+		profit[index] = z*x*pow(k,p.aalpha)*pow(l,p.v) - w*l;
 	};
 };
 /*
@@ -177,6 +200,7 @@ int main(int argc, char ** argv)
 	h_vec_d h_K_grid(nK);
 	h_vec_d h_z_grid(nz);
     h_vec_d h_x_grid(nx);
+    h_vec_d h_ssigmax_grid(nssigmax);
     h_vec_d h_q_grid(nq);
     h_vec_d h_markup_grid(nmarkup);
     h_vec_d h_logZ(nz);
@@ -193,6 +217,7 @@ int main(int argc, char ** argv)
 	h_vec_d h_Uplus(nk*ns*nK,0.0);
 	h_vec_i h_koptind(nk*ns*nK*nq,0.0);
 	h_vec_d h_EV(nk*ns*nK*nq,0.0);
+	h_vec_d h_profit(nk*ns*nK,0.0);
 
 	// load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
@@ -203,6 +228,8 @@ int main(int argc, char ** argv)
 	linspace(minK,maxK,nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
 	// Create shocks grids
+	h_ssigmax_grid[0] = p.ssigmax_low;
+	h_ssigmax_grid[0] = p.ssigmax_high;
 	double* h_logZ_ptr = thrust::raw_pointer_cast(h_logZ.data());
 	double* h_PZ_ptr   = thrust::raw_pointer_cast(  h_PZ.data());
 	tauchen(p.rrhoz, p.ssigmaz, h_logZ, h_PZ, tauchenwidth); // in #include "cuda_helpers.h"
@@ -239,13 +266,9 @@ int main(int argc, char ** argv)
 			int i_zplus       = subs[1];
 			int i_ssigmaxplus = subs[2];
 			if (i_ssigmaxplus==0) {
-				h_P[i_s+i_splus*ns] = h_PX_low[i_x+i_xplus*nx]
-				                    * h_PZ[i_z+i_zplus*nz]
-				                    * p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
+				h_P[i_s+i_splus*ns] = h_PX_low[i_x+i_xplus*nx]*h_PZ[i_z+i_zplus*nz]* p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
 			} else {
-				h_P[i_s+i_splus*ns] = h_PX_high[i_x+i_xplus*nx]
-				                    * h_PZ[i_z+i_zplus*nz]
-				                    * p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
+				h_P[i_s+i_splus*ns] = h_PX_high[i_x+i_xplus*nx]*h_PZ[i_z+i_zplus*nz]*p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
 			}
 		};
 	};
@@ -280,28 +303,32 @@ int main(int argc, char ** argv)
 	r.pphi_tthetaq = 0.1;// lower q -- more firms invest -- lower ttheta
 
 	// Copy to the device
-	d_vec_d d_K       = h_k_grid;
-	d_vec_d d_Z       = h_z_grid;
-	d_vec_d d_V       = h_V;
-	d_vec_d d_Vplus   = h_Vplus;
-	d_vec_i d_koptind = h_koptind;
-	d_vec_d d_EV      = h_EV;
-	d_vec_d d_P       = h_P;
+	d_vec_d d_k_grid       = h_k_grid;
+	d_vec_d d_K_grid       = h_K_grid;
+	d_vec_d d_x_grid       = h_x_grid;
+	d_vec_d d_z_grid       = h_z_grid;
+	d_vec_d d_ssigmax_grid = h_ssigmax_grid;
+	d_vec_d d_profit       = h_profit;
+	d_vec_d d_V            = h_V;
+	d_vec_d d_Vplus        = h_Vplus;
+	d_vec_i d_koptind      = h_koptind;
+	d_vec_d d_EV           = h_EV;
+	d_vec_d d_P            = h_P;
 
 	// Obtain device pointers to be used by cuBLAS
-	/*
-	double* d_K_ptr = raw_pointer_cast(d_K.data());
-	double* d_Z_ptr = raw_pointer_cast(d_Z.data());
-	double* d_V_ptr = raw_pointer_cast(d_V.data());
-	double* d_Vplus_ptr = raw_pointer_cast(d_Vplus.data());
-	int* d_koptind_ptr = raw_pointer_cast(d_koptind.data());
-	double* d_EV_ptr = raw_pointer_cast(d_EV.data());
-	double* d_P_ptr = raw_pointer_cast(d_P.data());
-	*/
+	double* d_k_grid_ptr       = raw_pointer_cast(d_k_grid.data());
+	double* d_K_grid_ptr       = raw_pointer_cast(d_K_grid.data());
+	double* d_x_grid_ptr       = raw_pointer_cast(d_x_grid.data());
+	double* d_z_grid_ptr       = raw_pointer_cast(d_z_grid.data());
+	double* d_ssigmax_grid_ptr = raw_pointer_cast(d_ssigmax_grid.data());
+	double* d_profit_ptr       = raw_pointer_cast(d_profit.data());
+	int* d_koptind_ptr         = raw_pointer_cast(d_koptind.data());
 
 	// Firstly a virtual index array from 0 to nk*nk*nz
 	thrust::counting_iterator<int> begin(0);
 	thrust::counting_iterator<int> end(nk*ns*nK*nq);
+	thrust::counting_iterator<int> begin_noq(0);
+	thrust::counting_iterator<int> end_noq(nk*ns*nK);
 
     // Create Timer
 	cudaEvent_t start, stop;
@@ -310,15 +337,23 @@ int main(int argc, char ** argv)
     // Start Timer
 	cudaEventRecord(start,NULL);
 
-	/*
 	double diff = 10;  int iter = 0;
 	while ((diff>tol)&&(iter<maxiter)){
 		// Directly find the new Value function
 		thrust::for_each(
-			begin,
-			end,
-			updateW(d_K_ptr, d_Z_ptr, d_EV_ptr, d_koptind_ptr, d_Vplus_ptr, p)
-                         );
+			begin_noq,
+			end_noq,
+			updateprofit(
+				d_profit_ptr,
+				d_k_grid_ptr,
+				d_K_grid_ptr,
+				d_x_grid_ptr,
+				d_z_grid_ptr,
+				d_ssigmax_grid_ptr,
+				p,
+				r
+			)
+		);
 
 		// Find diff
 		diff = thrust::transform_reduce(
@@ -352,19 +387,22 @@ int main(int argc, char ** argv)
 	std::cout << "Time= " << msecPerMatrixMul << " msec, iter= " << iter << std::endl;
 
 	// Copy back to host and print to file
-	h_V = d_V;
-	h_EV = d_EV;
+	h_V       = d_V;
+	h_EV      = d_EV;
 	h_koptind = d_koptind;
+	h_profit  = d_profit;
+	display_vec(h_profit);
 
+	/*
     save_vec(h_K,"./results/Kgrid.csv"); // in #include "cuda_helpers.h"
 	save_vec(h_Z,"./results/Zgrid.csv"); // in #include "cuda_helpers.h"
 	save_vec(h_P,"./results/Pgrid.csv"); // in #include "cuda_helpers.h"
 	save_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 	std::cout << "Policy functions output completed." << std::endl;
+	*/
 
 	// Export parameters to MATLAB
 	p.exportmatlab("./MATLAB/vfi_para.m");
-	*/
 
 	return 0;
 }

@@ -5,7 +5,7 @@ struct para {
 	// Model parameters
 	double bbeta;           //if you don't know beta... good luck
 	double ttau;            //search cost
-	double aalpha;          //y = a*k^aalpha*l^v
+	double aalpha;          //y = z*x*k^aalpha*l^v
 	double v;               //labor share
 	double ddelta;          //depreciation
 	double pphi;            //price of disinvestment relative to investment
