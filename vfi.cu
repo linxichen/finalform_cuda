@@ -69,6 +69,7 @@ struct updateprofit
 	) {
 		profit       = profit_ptr;
 		k_grid       = k_grid_ptr;
+		K_grid       = K_grid_ptr;
 		x_grid       = x_grid_ptr;
 		z_grid       = z_grid_ptr;
 		ssigmax_grid = ssigmax_grid_ptr;
@@ -106,7 +107,7 @@ struct updateprofit
 		double w = p.ppsi_n*C;
 
 		// Find profit finally
-		double l = pow(w/z/x/p.v/pow(k,p.aalpha),1.0/(p.v-1));
+		double l = pow( w/z/x/p.v/pow(k,p.aalpha), 1.0/(p.v-1) );
 		profit[index] = z*x*pow(k,p.aalpha)*pow(l,p.v) - w*l;
 	};
 };
@@ -229,7 +230,7 @@ int main(int argc, char ** argv)
 
 	// Create shocks grids
 	h_ssigmax_grid[0] = p.ssigmax_low;
-	h_ssigmax_grid[0] = p.ssigmax_high;
+	h_ssigmax_grid[1] = p.ssigmax_high;
 	double* h_logZ_ptr = thrust::raw_pointer_cast(h_logZ.data());
 	double* h_PZ_ptr   = thrust::raw_pointer_cast(  h_PZ.data());
 	tauchen(p.rrhoz, p.ssigmaz, h_logZ, h_PZ, tauchenwidth); // in #include "cuda_helpers.h"
@@ -384,7 +385,7 @@ int main(int argc, char ** argv)
 
 	// Compute and print the performance
 	float msecPerMatrixMul = msecTotal;
-	std::cout << "Time= " << msecPerMatrixMul << " msec, iter= " << iter << std::endl;
+	std::cout << "Time= " << msecPerMatrixMul/1000 << " secs, iter= " << iter << std::endl;
 
 	// Copy back to host and print to file
 	h_V       = d_V;
