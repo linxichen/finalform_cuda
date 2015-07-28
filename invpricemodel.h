@@ -19,6 +19,7 @@ struct para {
 	double ppsi_n;          //labor distutility
 	double aalpha0;         //efficient coeff of matching
 	double aalpha1;         //elasticity of matching
+	double eeta;            //adjustment coefficient
 	double Pssigmax [4];    //Transition prob of ssigmax
 
 	// Export parameters to a .m file in MATLAB syntax
