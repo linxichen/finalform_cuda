@@ -103,7 +103,7 @@ __host__ __device__
 int fit2grid(const double x, const int n, const double* X) {
 	if (x < X[0]) {
 		return 0;
-	} else if (x > X[n-1]) {
+	} else if (x >= X[n-1]) {
 		return n-1;
 	} else {
 		int left=0; int right=n-1; int mid=(n-1)/2;
@@ -116,7 +116,6 @@ int fit2grid(const double x, const int n, const double* X) {
 			} else {
 				right = mid;
 			};
-
 		};
 		return left;
 	}
