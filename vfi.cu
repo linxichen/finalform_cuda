@@ -7,8 +7,8 @@
 #define nq 25
 #define nmarkup 15
 #define tauchenwidth 2.5
-#define tol 1e-3
-#define outertol 1e-3
+#define tol 1e-2
+#define outertol 1e-2
 #define damp 0.5
 #define maxiter 2000
 #define SIMULPERIOD 3000
@@ -40,12 +40,6 @@
 
 // Includes model stuff
 #include "invpricemodel.h"
-
-/// This function finds the value of RHS given k', k, z
-__host__ __device__
-double rhsvalue (state s, int i_z, double kplus, int i_kplus, double* EV, para p) {
-	return 0;
-};
 
 // finds operating profit y-wl at each state given agg rules
 struct updateprofit
@@ -252,6 +246,9 @@ struct updateWV
 		U            = U_ptr,
 		V            = V_ptr,
 		Vplus        = Vplus_ptr,
+		koptind      = koptind_ptr,
+		kopt         = kopt_ptr,
+		active       = active_ptr,
 		p            = _p;
 		r            = _r;
 	};
@@ -295,7 +292,7 @@ struct updateWV
 		// find the indexes of (1-ddelta)*k
 		int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
 		int i_left_noinv, i_right_noinv;
-		if (noinvest_ind==nk-1) { // (1-ddelta)k>=maxK, then should use K[nk-2] as left point to extrapolate
+		if (noinvest_ind == nk-1) { // (1-ddelta)k>=maxK, then should use K[nk-2] as left point to extrapolate
 			i_left_noinv = nk-2;
 			i_right_noinv = nk-1;
 		} else {
@@ -334,14 +331,15 @@ struct updateWV
 
 		// Find U finally
 		W[index] = rhsmax;
-		if (W[index] > U[i_k+i_s*nk+i_K*nk*ns]) {
-			Vplus[index]   = W[index];
+		double U_value = U[i_k+i_s*nk+i_K*nk*ns];
+		if (rhsmax > U_value) {
+			Vplus[index]   = rhsmax;
 			active[index]  = 1;
 			koptind[index] = koptind_active;
 			kopt[index]    = k_grid[koptind_active];
 		} else {
-			Vplus[index] = U[i_k+i_s*nk+i_K*nk*ns];
-			active[index]  = 1;
+			Vplus[index] = U_value;
+			active[index]  = 0;
 			koptind[index] = noinvest_ind;
 			kopt[index]    = (1-p.ddelta)*k;
 		};
@@ -410,9 +408,9 @@ int main(int argc, char ** argv)
 	h_vec_d h_U(nk*ns*nK,0.0);
 	h_vec_d h_EV(nk*ns*nK*nq,0.0);
 	h_vec_d h_profit(nk*ns*nK,0.0);
-	h_vec_i h_koptind(nk*ns*nK*nq,0.0);
+	h_vec_i h_koptind(nk*ns*nK*nq,0);
 	h_vec_d h_kopt(nk*ns*nK*nq,0.0);
-	h_vec_i h_active(nk*ns*nK*nq,0.0);
+	h_vec_i h_active(nk*ns*nK*nq,0);
 
 	// load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
@@ -641,6 +639,7 @@ int main(int argc, char ** argv)
 	// Copy back to host and print to file
 	h_V       = d_V;
 	h_koptind = d_koptind;
+	h_kopt = d_kopt;
 	h_active  = d_active;
 	h_profit  = d_profit;
 
