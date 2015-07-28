@@ -22,7 +22,7 @@ CXX       = g++
 CXXFLAGS  = -O3 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
 
 # Add CUDA libraries to C++ compiler linking process
-LDFLAGS  += -v -lstdc++ -lcublas -lcurand -lcudart -std=c++11 -L$(LCUDA) -L$(LCUDA_MAC)
+LDFLAGS  += -lstdc++ -lcublas -lcurand -lcudart -std=c++11 -L$(LCUDA) -L$(LCUDA_MAC)
 
 # List Executables and Objects
 EXEC = vfi

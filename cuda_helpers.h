@@ -4,16 +4,36 @@
 #include <string>
 #include "common.h"
 
-// Tauchen's method
-__host__ __device__
-void tauchen(double rrho, double ssigma, double * Z, double * P) {
+// Tauchen's method for c++ vector style input. only available on host!
+// Note must use & so you can actually modify its content
+template <class T>
+void tauchen(double rrho, double ssigma, T& Z, T& P, double width) {
+	// Form the grid and neccessary info
 	double ssigma_z = sqrt( pow(ssigma,2)/(1-pow(rrho,2)) );
-	int nzgrid = nz;
-	Z[nzgrid-1] = 5*ssigma_z; Z[0] = -5*ssigma_z;
+	int nzgrid = Z.size();
+	Z[nzgrid-1] = width*ssigma_z; Z[0] = -width*ssigma_z;
 	double step = (Z[nzgrid-1] - Z[0])/ double(nzgrid-1);
 	for (int i = 2; i <= nzgrid-1; i++) {
 		Z[i-1] = Z[i-2] + step;
 	};
+
+	// Find P(i_z,1) and P(i_z,end)
+	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
+	    P[i_z + nzgrid*0]          = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
+	    P[i_z + nzgrid*(nzgrid-1)] = 1 - normcdf( (Z[nzgrid-1]-rrho*Z[i_z]-step/2)/ssigma  );
+	};
+
+	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
+	    for (int i_zplus = 1; i_zplus <= nzgrid-2; ++i_zplus) {
+            P[i_z+nzgrid*i_zplus] = normcdf( (Z[i_zplus]-rrho*Z[i_z]+step/2)/ssigma  )-normcdf( (Z[i_zplus]-rrho*Z[i_z]-step/2)/ssigma  );
+	    };
+	};
+};
+
+template<class T>
+void tauchen_givengrid(double rrho, double ssigma, T& Z, T& P, double width) {
+	int nzgrid = Z.size();
+	double step = (Z[nzgrid-1] - Z[0])/ double(nzgrid-1);
 
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
 	    P[i_z] = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
