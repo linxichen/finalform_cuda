@@ -56,10 +56,10 @@ void tauchen_givengrid(double rrho, double ssigma, T& Z, T& P, double width) {
 template<typename T>
 __host__ __device__
 T linear_interp(T x, T x_left, T x_right, T f_left, T f_right) {
-	if (abs(x_left-x_right)<1e-7) {
+	if (abs(x_left-x_right)<1e-10) {
 		return f_left;
-	} else if ( (x_left > x_right) || (x < x_left) || (x > x_right) ) {
-		return -9999999999.9999;
+	} else if (x_left > x_right) {
+		return -1200981025976;
 	} else {
 		return f_left + (f_right-f_left)/(x_right-x_left)*(x-x_left);
 	};
