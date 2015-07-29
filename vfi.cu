@@ -340,7 +340,7 @@ int main(int argc, char ** argv)
 	p.ppsi_n       = 1;
 	p.aalpha0      = 0.95;
 	p.aalpha1      = 0.01;
-	p.eeta         = 0.1;
+	p.eeta         = 0.0;
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
 
@@ -372,8 +372,8 @@ int main(int argc, char ** argv)
 	// load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 50.0;
-	double minK = 10.0*pow((1-p.ddelta),nk-1);
+	double maxK = 20.0;
+	double minK = maxK*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
 	};
