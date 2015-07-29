@@ -396,7 +396,7 @@ int main(int argc, char ** argv)
 	h_vec_d h_PX_high(nx*nx, 0.0);
 	h_vec_d h_P(ns*ns, 0.0);
 	h_vec_d h_V(nk*ns*nK*nq,0.0);
-	h_vec_d h_Vplus(nk*ns*nK*nq,0,0);
+	h_vec_d h_Vplus(nk*ns*nK*nq,0.0);
 	h_vec_d h_W(nk*ns*nK*nq,0.0);
 	h_vec_d h_U(nk*ns*nK,0.0);
 	h_vec_d h_EV(nk*ns*nK*nq,0.0);
