@@ -154,6 +154,8 @@ struct updateU
 		double Kplus   = exp( r.pphi_KC + r.pphi_KK*log(K) + r.pphi_Kz*log(z) + r.pphi_Kssigmax*log(ssigmax)  );
 		double qplus   = exp( r.pphi_qC + r.pphi_qK*log(K) + r.pphi_qz*log(z) + r.pphi_qssigmax*log(ssigmax)  );
 		double llambda = 1/C;
+		int i_Kplus = fit2grid(Kplus,nK,K_grid);
+		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find the indexes of (1-ddelta)*k
 		int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
@@ -167,12 +169,10 @@ struct updateU
 		};
 		double kplus_left  = k_grid[i_left];
 		double kplus_right = k_grid[i_right];
-		int i_Kplus = fit2grid(Kplus,nK,K_grid);
-		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find EV_noinvest
-		/* double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left, kplus_right, EV[i_left+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]); */
-		double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
+		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left, kplus_right, EV[i_left+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
+		/* double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]; */
 
 		// Find U finally
 		U[index] = llambda*profit[index] + p.bbeta*EV_noinvest;
@@ -194,22 +194,22 @@ struct updateWV
 	// Construct this object, create util from _util, etc.
 	__host__ __device__
 	updateWV(
-		double* profit_ptr,
-		double* k_grid_ptr,
-		double* K_grid_ptr,
-		double* x_grid_ptr,
-		double* z_grid_ptr,
-		double* ssigmax_grid_ptr,
-		double* q_grid_ptr,
-		double* EV_ptr,
-		double* W_ptr,
-		double* U_ptr,
-		double* V_ptr,
-		double* Vplus_ptr,
-		double* kopt_ptr,
-		int*    active_ptr,
-		int*    koptindplus_ptr,
-		para _p,
+		double*  profit_ptr,
+		double*  k_grid_ptr,
+		double*  K_grid_ptr,
+		double*  x_grid_ptr,
+		double*  z_grid_ptr,
+		double*  ssigmax_grid_ptr,
+		double*  q_grid_ptr,
+		double*  EV_ptr,
+		double*  W_ptr,
+		double*  U_ptr,
+		double*  V_ptr,
+		double*  Vplus_ptr,
+		double*  kopt_ptr,
+		int*     active_ptr,
+		int*     koptindplus_ptr,
+		para     _p,
 		aggrules _r
 	) {
 		profit       = profit_ptr;
@@ -253,6 +253,8 @@ struct updateWV
 		double ttheta = exp(r.pphi_tthetaC + r.pphi_tthetaK*log(K) + r.pphi_tthetaz*log(z) + r.pphi_tthetassigmax*log(ssigmax) + r.pphi_tthetaq*log(q) );
 		double llambda = 1/C;
 		double mmu = p.aalpha*pow(ttheta,p.aalpha1);
+		int i_Kplus = fit2grid(Kplus,nK,K_grid);
+		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find the indexes of (1-ddelta)*k
 		int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
@@ -266,12 +268,10 @@ struct updateWV
 		};
 		double kplus_left_noinv  = k_grid[i_left_noinv];
 		double kplus_right_noinv = k_grid[i_right_noinv];
-		int i_Kplus = fit2grid(Kplus,nK,K_grid);
-		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find EV_noinvest
-		/* double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]); */
-		double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
+		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
+		/* double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]; */
 
 		// search through all positve investment level
 		double rhsmax = -999999999999999;
@@ -288,19 +288,19 @@ struct updateWV
 			};
 		};
 
-		// Find U finally
+		// Find W and V finally
 		W[index] = rhsmax;
 		double U_value = U[i_k+i_K*nk+i_s*nk*nK];
 		if (rhsmax > U_value) {
-			Vplus[index]   = rhsmax;
-			active[index]  = 1;
+			Vplus[index]       = rhsmax;
+			active[index]      = 1;
 			koptindplus[index] = koptind_active;
-			kopt[index]    = k_grid[koptind_active];
+			kopt[index]        = k_grid[koptind_active];
 		} else {
-			Vplus[index] = U_value;
-			active[index]  = 0;
+			Vplus[index]       = U_value;
+			active[index]      = 0;
 			koptindplus[index] = noinvest_ind;
-			kopt[index]    = (1-p.ddelta)*k;
+			kopt[index]        = (1-p.ddelta)*k;
 		};
 	};
 };
@@ -376,10 +376,13 @@ int main(int argc, char ** argv)
 	// load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double minK = 0.01;
-	double maxK = 7.0;
-	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h"
-	linspace(minK,maxK,nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
+	double maxK = 10.0;
+	double minK = 10.0*pow((1-p.ddelta),nk-1);
+	for (int i_k = 0; i_k < nk; i_k++) {
+		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
+	};
+	/* linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
+	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
 	// Create shocks grids
 	h_ssigmax_grid[0] = p.ssigmax_low;
@@ -405,8 +408,8 @@ int main(int argc, char ** argv)
 		int i_x       = (i_s-i_ssigmax*nx*nz-i_z*nx)/(1);
 		for (int i_splus = 0; i_splus < ns; i_splus++) {
 			int i_ssigmaxplus = i_splus/(nx*nz);
-			int i_zplus       = (i_splus-i_ssigmax*nx*nz)/(nx);
-			int i_xplus       = (i_splus-i_ssigmax*nx*nz-i_z*nx)/(1);
+			int i_zplus       = (i_splus-i_ssigmaxplus*nx*nz)/(nx);
+			int i_xplus       = (i_splus-i_ssigmaxplus*nx*nz-i_zplus*nx)/(1);
 			if (i_ssigmaxplus==0) {
 				h_P[i_s+i_splus*ns] = h_PX_low[i_x+i_xplus*nx]*h_PZ[i_z+i_zplus*nz]* p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
 			} else {
@@ -502,18 +505,18 @@ int main(int argc, char ** argv)
 
 	// find profit at (i_k,i_s,i_K)
 	thrust::for_each(
-			begin_noq,
-			end_noq,
-			updateprofit(
-				d_profit_ptr,
-				d_k_grid_ptr,
-				d_K_grid_ptr,
-				d_x_grid_ptr,
-				d_z_grid_ptr,
-				d_ssigmax_grid_ptr,
-				p,
-				r
-				)
+		begin_noq,
+		end_noq,
+		updateprofit(
+			d_profit_ptr,
+			d_k_grid_ptr,
+			d_K_grid_ptr,
+			d_x_grid_ptr,
+			d_z_grid_ptr,
+			d_ssigmax_grid_ptr,
+			p,
+			r
+		)
 	);
 
 	// vfi begins
@@ -534,7 +537,8 @@ int main(int argc, char ** argv)
 			ns,
 			&beta,
 			d_EV_ptr,
-			nk*nK*nq);
+			nk*nK*nq
+		);
 
 
 		// find U currently
