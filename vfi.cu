@@ -578,7 +578,11 @@ int main(int argc, char ** argv)
 			0.0,
 			thrust::maximum<int>()
 		);
-		if (policy_diff == 0) consec++;
+		if (policy_diff == 0) {
+			consec++;
+		} else {
+			consec = 0;
+		};
 
 
 		std::cout << "diff is: "<< diff << std::endl;
