@@ -77,12 +77,12 @@ struct updateprofit
 		int subs[3];
 		int size_vec[3];
 		size_vec[0] = nk;
-		size_vec[1] = ns;
-		size_vec[2] = nK;
+		size_vec[1] = nK;
+		size_vec[2] = ns;
 		ind2sub(3,size_vec,index,subs);
 		int i_k = subs[0];
-		int i_s = subs[1];
-		int i_K = subs[2];
+		int i_K = subs[1];
+		int i_s = subs[2];
 
 		// Find aggregate stuff
 		double k = k_grid[i_k];
@@ -111,7 +111,7 @@ struct updateU
 {
 	// Data member
 	double *profit, *k_grid, *K_grid, *x_grid, *z_grid, *ssigmax_grid;
-	double *q_grid, *P;
+	double *q_grid, *EV;
 	double *U, *V;
 	para p;
 	aggrules r;
@@ -126,7 +126,7 @@ struct updateU
 		double* z_grid_ptr,
 		double* ssigmax_grid_ptr,
 		double* q_grid_ptr,
-		double* P_ptr,
+		double* EV_ptr,
 		double* U_ptr,
 		double* V_ptr,
 		para _p,
@@ -139,7 +139,7 @@ struct updateU
 		z_grid       = z_grid_ptr;
 		ssigmax_grid = ssigmax_grid_ptr;
 		q_grid       = q_grid_ptr;
-		P = P_ptr,
+		EV           = EV_ptr,
 		U            = U_ptr,
 		V            = V_ptr,
 		p            = _p;
@@ -152,12 +152,12 @@ struct updateU
 		int subs[3];
 		int size_vec[3];
 		size_vec[0] = nk;
-		size_vec[1] = ns;
-		size_vec[2] = nK;
+		size_vec[1] = nK;
+		size_vec[2] = ns;
 		ind2sub(3,size_vec,index,subs);
 		int i_k = subs[0];
-		int i_s = subs[1];
-		int i_K = subs[2];
+		int i_K = subs[1];
+		int i_s = subs[2];
 
 		// Find aggregate stuff
 		double k = k_grid[i_k];
@@ -191,10 +191,7 @@ struct updateU
 		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find EV_noinvest
-		double EV_noinvest = 0;
-		for (int i_splus = 0; i_splus < ns; i_splus++) {
-			EV_noinvest += P[i_s+i_splus*ns]*linear_interp( (1-p.ddelta)*k, kplus_left, kplus_right, V[i_left+i_splus*nk+i_Kplus*nk*ns+i_qplus*nk*ns*nK], V[i_right+i_splus*nk+i_Kplus*nk*ns+i_qplus*nk*ns*nK]);
-		};
+		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left, kplus_right, EV[i_left+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
 
 		// Find U finally
 		U[index] = llambda*profit[index] + p.bbeta*EV_noinvest;
@@ -206,7 +203,7 @@ struct updateWV
 {
 	// Data member
 	double *profit, *k_grid, *K_grid, *x_grid, *z_grid, *ssigmax_grid;
-	double *q_grid, *P;
+	double *q_grid, *EV;
 	double *W, *U, *V;
 	double *Vplus, *kopt;
 	int    *active, *koptind;
@@ -223,7 +220,7 @@ struct updateWV
 		double* z_grid_ptr,
 		double* ssigmax_grid_ptr,
 		double* q_grid_ptr,
-		double* P_ptr,
+		double* EV_ptr,
 		double* W_ptr,
 		double* U_ptr,
 		double* V_ptr,
@@ -241,7 +238,7 @@ struct updateWV
 		z_grid       = z_grid_ptr;
 		ssigmax_grid = ssigmax_grid_ptr;
 		q_grid       = q_grid_ptr;
-		P            = P_ptr,
+		EV           = EV_ptr,
 		W            = U_ptr,
 		U            = U_ptr,
 		V            = V_ptr,
@@ -259,14 +256,14 @@ struct updateWV
 		int subs[4];
 		int size_vec[4];
 		size_vec[0] = nk;
-		size_vec[1] = ns;
-		size_vec[2] = nK;
-		size_vec[3] = nq;
+		size_vec[1] = nK;
+		size_vec[2] = nq;
+		size_vec[3] = ns;
 		ind2sub(4,size_vec,index,subs);
 		int i_k = subs[0];
-		int i_s = subs[1];
-		int i_K = subs[2];
-		int i_q = subs[3];
+		int i_K = subs[1];
+		int i_q = subs[2];
+		int i_s = subs[3];
 
 		// Find aggregate stuff
 		double k = k_grid[i_k];
@@ -305,10 +302,7 @@ struct updateWV
 		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find EV_noinvest
-		double EV_noinvest = 0;
-		for (int i_splus = 0; i_splus < ns; i_splus++) {
-			EV_noinvest += P[i_s+i_splus*ns]*linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, V[i_left_noinv+i_splus*nk+i_Kplus*nk*ns+i_qplus*nk*ns*nK], V[i_right_noinv+i_splus*nk+i_Kplus*nk*ns+i_qplus*nk*ns*nK]);
-		};
+		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
 
 		// search through all positve investment level
 		double rhsmax = -999999999999999;
@@ -317,12 +311,8 @@ struct updateWV
 			double convexadj = p.eeta*k*pow((k_grid[i_kplus]-(1-p.ddelta)*k)/k,2);
 			double effective_price = (k_grid[i_kplus]>(1-p.ddelta)*k) ? q : p.pphi*q;
 			// compute kinda stupidly EV
-			double EV = 0;
-			for (int i_splus = 0; i_splus < ns; i_splus++) {
-				EV += P[i_s+i_splus*ns]*V[i_kplus+i_splus*nk+i_Kplus*nk*ns+i_qplus*nk*ns*nK];
-			};
-
-			double candidate = llambda*profit[i_k+i_s*nk+i_K*nk*ns] + mmu*( llambda*(-effective_price)*(k_grid[i_kplus]-(1-p.ddelta)*k) - llambda*convexadj + p.bbeta*EV ) + (1-mmu)*EV_noinvest;
+			double EV_inv = EV[i_kplus+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
+			double candidate = llambda*profit[i_k+i_K*nk+i_s*nk*nK] + mmu*( llambda*(-effective_price)*(k_grid[i_kplus]-(1-p.ddelta)*k) - llambda*convexadj + p.bbeta*EV_inv ) + (1-mmu)*p.bbeta*EV_noinvest;
 			if (candidate > rhsmax) {
 				rhsmax         = candidate;
 				koptind_active = i_kplus;
@@ -331,7 +321,7 @@ struct updateWV
 
 		// Find U finally
 		W[index] = rhsmax;
-		double U_value = U[i_k+i_s*nk+i_K*nk*ns];
+		double U_value = U[i_k+i_K*nk+i_s*nk*nK];
 		if (rhsmax > U_value) {
 			Vplus[index]   = rhsmax;
 			active[index]  = 1;
@@ -521,6 +511,7 @@ int main(int argc, char ** argv)
 	double* d_profit_ptr       = raw_pointer_cast(d_profit.data());
 	double* d_q_grid_ptr       = raw_pointer_cast(d_q_grid.data());
 	double* d_V_ptr            = raw_pointer_cast(d_V.data());
+	double* d_EV_ptr           = raw_pointer_cast(d_EV.data());
 	double* d_W_ptr            = raw_pointer_cast(d_W.data());
 	double* d_Vplus_ptr        = raw_pointer_cast(d_Vplus.data());
 	double* d_U_ptr            = raw_pointer_cast(d_U.data());
@@ -542,8 +533,31 @@ int main(int argc, char ** argv)
     // Start Timer
 	cudaEventRecord(start,NULL);
 
+	// Prepare for cuBLAS things
+	cublasHandle_t handle;
+	cublasCreate(&handle);
+	const double alpha = 1.0;
+	const double beta = 0.0;
+
 	double diff = 10;  int iter = 0;
 	while ((diff>tol)&&(iter<maxiter)){
+		// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
+		cublasDgemm(
+			handle,
+			CUBLAS_OP_N,
+			CUBLAS_OP_T,
+			nk*nK*nq,
+			ns,
+			ns,
+			&alpha,
+			d_V_ptr,
+			nk*nK*nq,
+			d_P_ptr,
+			ns,
+			&beta,
+			d_EV_ptr,
+			nk*nK*nq);
+
 		// find profit at (i_k,i_s,i_K)
 		thrust::for_each(
 			begin_noq,
@@ -572,7 +586,7 @@ int main(int argc, char ** argv)
 				d_z_grid_ptr,
 				d_ssigmax_grid_ptr,
 				d_q_grid_ptr,
-				d_P_ptr,
+				d_EV_ptr,
 				d_U_ptr,
 				d_V_ptr,
 				p,
@@ -592,7 +606,7 @@ int main(int argc, char ** argv)
 				d_z_grid_ptr,
 				d_ssigmax_grid_ptr,
 				d_q_grid_ptr,
-				d_P_ptr,
+				d_EV_ptr,
 				d_W_ptr,
 				d_U_ptr,
 				d_V_ptr,
@@ -653,6 +667,9 @@ int main(int argc, char ** argv)
 
 	// Export parameters to MATLAB
 	p.exportmatlab("./MATLAB/vfi_para.m");
+
+	// to be safe destroy cuBLAS handle
+	cublasDestroy(handle);
 
 	return 0;
 }
