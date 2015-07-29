@@ -191,7 +191,8 @@ struct updateU
 		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find EV_noinvest
-		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left, kplus_right, EV[i_left+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
+		/* double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left, kplus_right, EV[i_left+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]); */
+		double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
 
 		// Find U finally
 		U[index] = llambda*profit[index] + p.bbeta*EV_noinvest;
@@ -206,7 +207,7 @@ struct updateWV
 	double *q_grid, *EV;
 	double *W, *U, *V;
 	double *Vplus, *kopt;
-	int    *active, *koptind;
+	int    *active, *koptindplus;
 	para p;
 	aggrules r;
 
@@ -227,7 +228,7 @@ struct updateWV
 		double* Vplus_ptr,
 		double* kopt_ptr,
 		int*    active_ptr,
-		int*    koptind_ptr,
+		int*    koptindplus_ptr,
 		para _p,
 		aggrules _r
 	) {
@@ -243,7 +244,7 @@ struct updateWV
 		U            = U_ptr,
 		V            = V_ptr,
 		Vplus        = Vplus_ptr,
-		koptind      = koptind_ptr,
+		koptindplus  = koptindplus_ptr,
 		kopt         = kopt_ptr,
 		active       = active_ptr,
 		p            = _p;
@@ -302,7 +303,8 @@ struct updateWV
 		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find EV_noinvest
-		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
+		/* double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]); */
+		double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
 
 		// search through all positve investment level
 		double rhsmax = -999999999999999;
@@ -325,16 +327,17 @@ struct updateWV
 		if (rhsmax > U_value) {
 			Vplus[index]   = rhsmax;
 			active[index]  = 1;
-			koptind[index] = koptind_active;
+			koptindplus[index] = koptind_active;
 			kopt[index]    = k_grid[koptind_active];
 		} else {
 			Vplus[index] = U_value;
 			active[index]  = 0;
-			koptind[index] = noinvest_ind;
+			koptindplus[index] = noinvest_ind;
 			kopt[index]    = (1-p.ddelta)*k;
 		};
 	};
 };
+
 // This unctor calculates the distance
 struct myDist {
 	// Tple is (V1low,Vplus1low,V1high,Vplus1high,...)
@@ -399,14 +402,15 @@ int main(int argc, char ** argv)
 	h_vec_d h_EV(nk*ns*nK*nq,0.0);
 	h_vec_d h_profit(nk*ns*nK,0.0);
 	h_vec_i h_koptind(nk*ns*nK*nq,0);
+	h_vec_i h_koptindplus(nk*ns*nK*nq,0);
 	h_vec_d h_kopt(nk*ns*nK*nq,0.0);
 	h_vec_i h_active(nk*ns*nK*nq,0);
 
 	// load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double minK = 0.5;
-	double maxK = 20.0;
+	double minK = 0.01;
+	double maxK = 70.0;
 	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minK,maxK,nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
@@ -500,6 +504,7 @@ int main(int argc, char ** argv)
 	d_vec_d d_P            = h_P;
 	d_vec_d d_kopt         = h_kopt;
 	d_vec_i d_koptind      = h_koptind;
+	d_vec_i d_koptindplus  = h_koptindplus;
 	d_vec_i d_active       = h_active;
 
 	// Obtain device pointers to be used by cuBLAS
@@ -518,6 +523,7 @@ int main(int argc, char ** argv)
 	double* d_P_ptr            = raw_pointer_cast(d_P.data());
 	double* d_kopt_ptr         = raw_pointer_cast(d_kopt.data());
 	int* d_koptind_ptr         = raw_pointer_cast(d_koptind.data());
+	int* d_koptindplus_ptr     = raw_pointer_cast(d_koptindplus.data());
 	int* d_active_ptr          = raw_pointer_cast(d_active.data());
 
 	// Firstly a virtual index array from 0 to nk*nk*nz
@@ -539,8 +545,8 @@ int main(int argc, char ** argv)
 	const double alpha = 1.0;
 	const double beta = 0.0;
 
-	double diff = 10;  int iter = 0;
-	while ((diff>tol)&&(iter<maxiter)){
+	double diff = 10;  int iter = 0; int consec = 0;
+	while ((diff>tol)&&(iter<maxiter)&&(consec<10)){
 		// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
 		cublasDgemm(
 			handle,
@@ -613,7 +619,7 @@ int main(int argc, char ** argv)
 				d_Vplus_ptr,
 				d_kopt_ptr,
 				d_active_ptr,
-				d_koptind_ptr,
+				d_koptindplus_ptr,
 				p,
 				r
 			)
@@ -626,14 +632,25 @@ int main(int argc, char ** argv)
 			myDist(),
 			0.0,
 			thrust::maximum<double>()
-			);
+		);
 
-// maximum in #include <thrust/extrema.h>
+		// Check how many consecutive periods policy hasn't change
+		int policy_diff = thrust::transform_reduce(
+			thrust::make_zip_iterator(thrust::make_tuple(d_koptind.begin(),d_koptindplus.begin())),
+			thrust::make_zip_iterator(thrust::make_tuple(d_koptind.end()  ,d_koptindplus.end())),
+			myDist(),
+			0.0,
+			thrust::maximum<int>()
+		);
+		if (policy_diff == 0) consec++;
+
 
 		std::cout << "diff is: "<< diff << std::endl;
+		std::cout << "consec is: "<< consec << std::endl;
 
 		// update correspondence
-		d_V = d_Vplus;
+		d_V       = d_Vplus;
+		d_koptind = d_koptindplus;
 
 		std::cout << ++iter << std::endl;
 		std::cout << "=====================" << std::endl;
