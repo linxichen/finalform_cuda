@@ -1,4 +1,4 @@
-#define nk 100
+#define nk 300
 #define nx 7
 #define nz 7
 #define nssigmax 2
@@ -289,17 +289,13 @@ struct updateWV
 		};
 
 		// Find W and V finally
-		W[index] = rhsmax;
-		double U_value = U[i_k+i_K*nk+i_s*nk*nK];
-		if (rhsmax > U_value) {
-			Vplus[index]       = rhsmax;
-			active[index]      = 1;
+		Vplus[index] = rhsmax;
 			koptindplus[index] = koptind_active;
+		if (k_grid[koptind_active] != (1-p.ddelta)*k) {
+			active[index]      = 1;
 			kopt[index]        = k_grid[koptind_active];
 		} else {
-			Vplus[index]       = U_value;
 			active[index]      = 0;
-			koptindplus[index] = noinvest_ind;
 			kopt[index]        = (1-p.ddelta)*k;
 		};
 	};
@@ -376,7 +372,7 @@ int main(int argc, char ** argv)
 	// load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 10.0;
+	double maxK = 50.0;
 	double minK = 10.0*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
@@ -521,7 +517,7 @@ int main(int argc, char ** argv)
 
 	// vfi begins
 	double diff = 10;  int iter = 0; int consec = 0;
-	while ((diff>tol)&&(iter<maxiter)&&(consec<10)){
+	while ((diff>tol)&&(iter<maxiter)&&(consec<20)){
 		// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
 		cublasDgemm(
 			handle,
@@ -540,28 +536,7 @@ int main(int argc, char ** argv)
 			nk*nK*nq
 		);
 
-
-		// find U currently
-		thrust::for_each(
-			begin_noq,
-			end_noq,
-			updateU(
-				d_profit_ptr,
-				d_k_grid_ptr,
-				d_K_grid_ptr,
-				d_x_grid_ptr,
-				d_z_grid_ptr,
-				d_ssigmax_grid_ptr,
-				d_q_grid_ptr,
-				d_EV_ptr,
-				d_U_ptr,
-				d_V_ptr,
-				p,
-				r
-			)
-		);
-
-		// find U currently
+		// find W/V currently
 		thrust::for_each(
 			begin,
 			end,
