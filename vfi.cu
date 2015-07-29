@@ -74,26 +74,16 @@ struct updateprofit
 	__host__ __device__
 	void operator()(int index) {
 		// Perform ind2sub
-		int subs[3];
-		int size_vec[3];
-		size_vec[0] = nk;
-		size_vec[1] = nK;
-		size_vec[2] = ns;
-		ind2sub(3,size_vec,index,subs);
-		int i_k = subs[0];
-		int i_K = subs[1];
-		int i_s = subs[2];
+		int i_s = index/(nk*nK);
+		int i_K = (index-i_s*nk*nK)/(nk);
+		int i_k = (index-i_s*nk*nK-i_K*nk)/(1);
 
 		// Find aggregate stuff
 		double k = k_grid[i_k];
 		double K = K_grid[i_K];
-		size_vec[0] = nx;
-		size_vec[1] = nz;
-		size_vec[2] = nssigmax;
-		ind2sub(3,size_vec,i_s,subs);
-		int i_x       = subs[0];
-		int i_z       = subs[1];
-		int i_ssigmax = subs[2];
+		int i_ssigmax = i_s/(nx*nz);
+		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
+		int i_x       = (i_s-i_ssigmax*nx*nz-i_z*nx)/(1);
 		double x       = x_grid[i_x];
 		double z       = z_grid[i_z];
 		double ssigmax = ssigmax_grid[i_ssigmax];
@@ -149,25 +139,15 @@ struct updateU
 	__host__ __device__
 	void operator()(int index) {
 		// Perform ind2sub
-		int subs[3];
-		int size_vec[3];
-		size_vec[0] = nk;
-		size_vec[1] = nK;
-		size_vec[2] = ns;
-		ind2sub(3,size_vec,index,subs);
-		int i_k = subs[0];
-		int i_K = subs[1];
-		int i_s = subs[2];
+		int i_s = index/(nk*nK);
+		int i_K = (index-i_s*nk*nK)/(nk);
+		int i_k = (index-i_s*nk*nK-i_K*nk)/(1);
 
 		// Find aggregate stuff
 		double k = k_grid[i_k];
 		double K = K_grid[i_K];
-		size_vec[0] = nx;
-		size_vec[1] = nz;
-		size_vec[2] = nssigmax;
-		ind2sub(3,size_vec,i_s,subs);
-		int i_z       = subs[1];
-		int i_ssigmax = subs[2];
+		int i_ssigmax = i_s/(nx*nz);
+		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
 		double z       = z_grid[i_z];
 		double ssigmax = ssigmax_grid[i_ssigmax];
 		double C       = exp( r.pphi_CC + r.pphi_CK*log(K) + r.pphi_Cz*log(z) + r.pphi_Cssigmax*log(ssigmax)  );
@@ -254,32 +234,19 @@ struct updateWV
 	__host__ __device__
 	void operator()(int index) {
 		// Perform ind2sub
-		int subs[4];
-		int size_vec[4];
-		size_vec[0] = nk;
-		size_vec[1] = nK;
-		size_vec[2] = nq;
-		size_vec[3] = ns;
-		ind2sub(4,size_vec,index,subs);
-		int i_k = subs[0];
-		int i_K = subs[1];
-		int i_q = subs[2];
-		int i_s = subs[3];
+		int i_s = (index)/(nk*nK*nq);
+		int i_q = (index-i_s*nk*nK*nq)/(nk*nK);
+		int i_K = (index-i_s*nk*nK*nq-i_q*nk*nK)/(nk);
+		int i_k = (index-i_s*nk*nK*nq-i_q*nk*nK-i_K*nk)/(1);
 
 		// Find aggregate stuff
-		double k = k_grid[i_k];
-		double K = K_grid[i_K];
-		double q = q_grid[i_q];
-		int subs_shock [3];
-		int size_vec_shock [3];
-		size_vec_shock[0] = nx;
-		size_vec_shock[1] = nz;
-		size_vec_shock[2] = nssigmax;
-		ind2sub(3,size_vec_shock,i_s,subs_shock);
-		int i_z           = subs_shock[1];
-		int i_ssigmax     = subs_shock[2];
-		double z          = z_grid[i_z];
-		double ssigmax    = ssigmax_grid[i_ssigmax];
+		int i_ssigmax = i_s/(nx*nz);
+		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
+		double k       = k_grid[i_k];
+		double K       = K_grid[i_K];
+		double q       = q_grid[i_q];
+		double z       = z_grid[i_z];
+		double ssigmax = ssigmax_grid[i_ssigmax];
 		double C      = exp(r.pphi_CC      + r.pphi_CK*log(K)      + r.pphi_Cz*log(z)      + r.pphi_Cssigmax*log(ssigmax)      );
 		double Kplus  = exp(r.pphi_KC      + r.pphi_KK*log(K)      + r.pphi_Kz*log(z)      + r.pphi_Kssigmax*log(ssigmax)      );
 		double qplus  = exp(r.pphi_qC      + r.pphi_qK*log(K)      + r.pphi_qz*log(z)      + r.pphi_qssigmax*log(ssigmax)      );
@@ -433,25 +400,13 @@ int main(int argc, char ** argv)
 	};
 	// find combined transition matrix P
 	for (int i_s = 0; i_s < ns; i_s++) {
-		int subs[3];
-		int size_vec[3];
-		size_vec[0] = nx;
-		size_vec[1] = nz;
-		size_vec[2] = nssigmax;
-		ind2sub(3,size_vec,i_s,subs);
-		int i_x       = subs[0];
-		int i_z       = subs[1];
-		int i_ssigmax = subs[2];
+		int i_ssigmax = i_s/(nx*nz);
+		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
+		int i_x       = (i_s-i_ssigmax*nx*nz-i_z*nx)/(1);
 		for (int i_splus = 0; i_splus < ns; i_splus++) {
-			int subs[3];
-			int size_vec[3];
-			size_vec[0] = nx;
-			size_vec[1] = nz;
-			size_vec[2] = nssigmax;
-			ind2sub(3,size_vec,i_splus,subs);
-			int i_xplus       = subs[0];
-			int i_zplus       = subs[1];
-			int i_ssigmaxplus = subs[2];
+			int i_ssigmaxplus = i_splus/(nx*nz);
+			int i_zplus       = (i_splus-i_ssigmax*nx*nz)/(nx);
+			int i_xplus       = (i_splus-i_ssigmax*nx*nz-i_z*nx)/(1);
 			if (i_ssigmaxplus==0) {
 				h_P[i_s+i_splus*ns] = h_PX_low[i_x+i_xplus*nx]*h_PZ[i_z+i_zplus*nz]* p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
 			} else {
