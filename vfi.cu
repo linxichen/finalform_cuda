@@ -410,7 +410,7 @@ int main(int argc, char ** argv)
 
 	// Create capital grid
 	double minK = 0.01;
-	double maxK = 70.0;
+	double maxK = 7.0;
 	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minK,maxK,nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
@@ -545,6 +545,23 @@ int main(int argc, char ** argv)
 	const double alpha = 1.0;
 	const double beta = 0.0;
 
+	// find profit at (i_k,i_s,i_K)
+	thrust::for_each(
+			begin_noq,
+			end_noq,
+			updateprofit(
+				d_profit_ptr,
+				d_k_grid_ptr,
+				d_K_grid_ptr,
+				d_x_grid_ptr,
+				d_z_grid_ptr,
+				d_ssigmax_grid_ptr,
+				p,
+				r
+				)
+	);
+
+	// vfi begins
 	double diff = 10;  int iter = 0; int consec = 0;
 	while ((diff>tol)&&(iter<maxiter)&&(consec<10)){
 		// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
@@ -564,21 +581,6 @@ int main(int argc, char ** argv)
 			d_EV_ptr,
 			nk*nK*nq);
 
-		// find profit at (i_k,i_s,i_K)
-		thrust::for_each(
-			begin_noq,
-			end_noq,
-			updateprofit(
-				d_profit_ptr,
-				d_k_grid_ptr,
-				d_K_grid_ptr,
-				d_x_grid_ptr,
-				d_z_grid_ptr,
-				d_ssigmax_grid_ptr,
-				p,
-				r
-			)
-		);
 
 		// find U currently
 		thrust::for_each(
