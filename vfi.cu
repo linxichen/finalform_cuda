@@ -382,21 +382,21 @@ int main(int argc, char ** argv)
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
 
 	// Create all STATE, SHOCK grids here
-	h_vec_d h_k_grid(nk);
-	h_vec_d h_K_grid(nK);
-	h_vec_d h_z_grid(nz);
-    h_vec_d h_x_grid(nx);
-    h_vec_d h_ssigmax_grid(nssigmax);
-    h_vec_d h_q_grid(nq);
-    h_vec_d h_markup_grid(nmarkup);
-    h_vec_d h_logZ(nz);
-    h_vec_d h_logX(nx);
+	h_vec_d h_k_grid(nk,0.0);
+	h_vec_d h_K_grid(nK,0.0);
+	h_vec_d h_z_grid(nz,0.0);
+	h_vec_d h_x_grid(nx,0.0);
+	h_vec_d h_ssigmax_grid(nssigmax,0.0);
+	h_vec_d h_q_grid(nq,0.0);
+	h_vec_d h_markup_grid(nmarkup,0.0);
+	h_vec_d h_logZ(nz,0.0);
+	h_vec_d h_logX(nx,0.0);
 	h_vec_d h_PZ(nz*nz, 0.0);
 	h_vec_d h_PX_low(nx*nx, 0.0);
 	h_vec_d h_PX_high(nx*nx, 0.0);
 	h_vec_d h_P(ns*ns, 0.0);
 	h_vec_d h_V(nk*ns*nK*nq,0.0);
-	h_vec_d h_Vplus(nk*ns*nK*nq,0);
+	h_vec_d h_Vplus(nk*ns*nK*nq,0,0);
 	h_vec_d h_W(nk*ns*nK*nq,0.0);
 	h_vec_d h_U(nk*ns*nK,0.0);
 	h_vec_d h_EV(nk*ns*nK*nq,0.0);
@@ -656,7 +656,6 @@ int main(int argc, char ** argv)
 
 		std::cout << ++iter << std::endl;
 		std::cout << "=====================" << std::endl;
-
 	};
 
 	// Stop Timer
@@ -676,8 +675,8 @@ int main(int argc, char ** argv)
 	h_active  = d_active;
 	h_profit  = d_profit;
 
-    save_vec(h_K_grid,"./results/K_grid.csv");   // in #include "cuda_helpers.h"
-    save_vec(h_k_grid,"./results/k_grid.csv");   // in #include "cuda_helpers.h"
+	save_vec(h_K_grid,"./results/K_grid.csv");   // in #include "cuda_helpers.h"
+	save_vec(h_k_grid,"./results/k_grid.csv");   // in #include "cuda_helpers.h"
 	save_vec(h_V,"./results/Vgrid.csv");         // in #include "cuda_helpers.h"
 	save_vec(h_active,"./results/active.csv");   // in #include "cuda_helpers.h"
 	save_vec(h_koptind,"./results/koptind.csv"); // in #include "cuda_helpers.h"
