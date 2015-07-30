@@ -11,7 +11,8 @@
 #define outertol 1e-2
 #define damp 0.5
 #define maxiter 2000
-#define SIMULPERIOD 3000
+#define SIMULPERIOD 1000
+#define nhousehold 10000
 #define kwidth 1.5
 
 /* Includes, system */
@@ -34,6 +35,7 @@
 // Includes, cuda
 #include <cublas_v2.h>
 #include "cuda_helpers.h"
+#include <curand.h>
 
 // Includes, my own creation
 #include "common.h"
@@ -301,6 +303,130 @@ struct updateWV
 	};
 };
 
+// simulate for each household
+struct simulation
+{
+	// Data member
+	double *profit, *k_grid, *K_grid, *x_grid, *z_grid, *ssigmax_grid;
+	double *q_grid, *EV;
+	double *W, *U, *V;
+	double *Vplus, *kopt;
+	int    *active, *koptindplus;
+	para p;
+	aggrules r;
+
+	// Construct this object, create util from _util, etc.
+	__host__ __device__
+	simulation(
+		double*  profit_ptr,
+		double*  k_grid_ptr,
+		double*  K_grid_ptr,
+		double*  x_grid_ptr,
+		double*  z_grid_ptr,
+		double*  ssigmax_grid_ptr,
+		double*  q_grid_ptr,
+		double*  EV_ptr,
+		double*  W_ptr,
+		double*  U_ptr,
+		double*  V_ptr,
+		double*  Vplus_ptr,
+		double*  kopt_ptr,
+		int*     active_ptr,
+		int*     koptindplus_ptr,
+		para     _p,
+		aggrules _r
+	) {
+		profit       = profit_ptr;
+		k_grid       = k_grid_ptr;
+		K_grid       = K_grid_ptr;
+		x_grid       = x_grid_ptr;
+		z_grid       = z_grid_ptr;
+		ssigmax_grid = ssigmax_grid_ptr;
+		q_grid       = q_grid_ptr;
+		EV           = EV_ptr,
+		W            = U_ptr,
+		U            = U_ptr,
+		V            = V_ptr,
+		Vplus        = Vplus_ptr,
+		koptindplus  = koptindplus_ptr,
+		kopt         = kopt_ptr,
+		active       = active_ptr,
+		p            = _p;
+		r            = _r;
+	};
+
+	__host__ __device__
+	void operator()(int index) {
+		k_sim[index+0*nhousehold] = k_start;
+		K_sim[index+0*nhousehold] = K_start;
+		q_sim[index+0*nhousehold] = q_start;
+		// Perform ind2sub
+		int i_s = (index)/(nk*nK*nq);
+		int i_q = (index-i_s*nk*nK*nq)/(nk*nK);
+		int i_K = (index-i_s*nk*nK*nq-i_q*nk*nK)/(nk);
+		int i_k = (index-i_s*nk*nK*nq-i_q*nk*nK-i_K*nk)/(1);
+
+		// Find aggregate stuff
+		int i_ssigmax = i_s/(nx*nz);
+		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
+		double k       = k_grid[i_k];
+		double K       = K_grid[i_K];
+		double q       = q_grid[i_q];
+		double z       = z_grid[i_z];
+		double ssigmax = ssigmax_grid[i_ssigmax];
+		double C      = exp(r.pphi_CC      + r.pphi_CK*log(K)      + r.pphi_Cz*log(z)      + r.pphi_Cssigmax*log(ssigmax)      );
+		double Kplus  = exp(r.pphi_KC      + r.pphi_KK*log(K)      + r.pphi_Kz*log(z)      + r.pphi_Kssigmax*log(ssigmax)      );
+		double qplus  = exp(r.pphi_qC      + r.pphi_qK*log(K)      + r.pphi_qz*log(z)      + r.pphi_qssigmax*log(ssigmax)      );
+		double ttheta = exp(r.pphi_tthetaC + r.pphi_tthetaK*log(K) + r.pphi_tthetaz*log(z) + r.pphi_tthetassigmax*log(ssigmax) + r.pphi_tthetaq*log(q) );
+		double llambda = 1/C;
+		double mmu = p.aalpha*pow(ttheta,p.aalpha1);
+		int i_Kplus = fit2grid(Kplus,nK,K_grid);
+		int i_qplus = fit2grid(qplus,nq,q_grid);
+
+		// find the indexes of (1-ddelta)*k
+		int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
+		int i_left_noinv, i_right_noinv;
+		if (noinvest_ind == nk-1) { // (1-ddelta)k>=maxK, then should use K[nk-2] as left point to extrapolate
+			i_left_noinv = nk-2;
+			i_right_noinv = nk-1;
+		} else {
+			i_left_noinv = noinvest_ind;
+			i_right_noinv = noinvest_ind+1;
+		};
+		double kplus_left_noinv  = k_grid[i_left_noinv];
+		double kplus_right_noinv = k_grid[i_right_noinv];
+
+		// find EV_noinvest
+		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
+		/* double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]; */
+
+		// search through all positve investment level
+		double rhsmax = -999999999999999;
+		int koptind_active = 0;
+		for (int i_kplus = 0; i_kplus < nk; i_kplus++) {
+			double convexadj = p.eeta*k*pow((k_grid[i_kplus]-(1-p.ddelta)*k)/k,2);
+			double effective_price = (k_grid[i_kplus]>(1-p.ddelta)*k) ? q : p.pphi*q;
+			// compute kinda stupidly EV
+			double EV_inv = EV[i_kplus+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
+			double candidate = llambda*profit[i_k+i_K*nk+i_s*nk*nK] + mmu*( llambda*(-effective_price)*(k_grid[i_kplus]-(1-p.ddelta)*k) - llambda*convexadj + p.bbeta*EV_inv ) + (1-mmu)*p.bbeta*EV_noinvest;
+			if (candidate > rhsmax) {
+				rhsmax         = candidate;
+				koptind_active = i_kplus;
+			};
+		};
+
+		// Find W and V finally
+		Vplus[index] = rhsmax;
+			koptindplus[index] = koptind_active;
+		if (k_grid[koptind_active] != (1-p.ddelta)*k) {
+			active[index]      = 1;
+			kopt[index]        = k_grid[koptind_active];
+		} else {
+			active[index]      = 0;
+			kopt[index]        = (1-p.ddelta)*k;
+		};
+	};
+};
 // This unctor calculates the distance
 struct myDist {
 	// Tple is (V1low,Vplus1low,V1high,Vplus1high,...)
@@ -380,7 +506,7 @@ int main(int argc, char ** argv)
 	/* linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
 	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
-	// Create shocks grids
+	// Create shocks grids and transition matrix
 	h_ssigmax_grid[0] = p.ssigmax_low;
 	h_ssigmax_grid[1] = p.ssigmax_high;
 	double* h_logZ_ptr = thrust::raw_pointer_cast(h_logZ.data());
@@ -413,6 +539,12 @@ int main(int argc, char ** argv)
 			}
 		};
 	};
+
+	// find cdf on host then transfer to device
+	cudavec<double> CDF_z(nz*nz,0);                   pdf2cdf(h_PZ_ptr,nz,CDF_z.hptr);                   CDF_z.h2d();
+	cudavec<double> CDF_ssigmax(nssigmax*nssigmax,0); pdf2cdf(p.Pssigmax,nssigmax,CDF_ssigmax.hptr); CDF_ssigmax.h2d();
+	cudavec<double> CDF_x_low(nx*nx,0);               pdf2cdf(h_PX_low_ptr,nx,CDF_x_low.hptr);           CDF_x_low.h2d();
+	cudavec<double> CDF_x_high(nx*nx,0);              pdf2cdf(h_PX_high_ptr,nx,CDF_x_high.hptr);         CDF_x_high.h2d();
 
 	// Create pricing grids
 	double minq = 0.4;
@@ -485,6 +617,34 @@ int main(int argc, char ** argv)
 	thrust::counting_iterator<int> end(nk*ns*nK*nq);
 	thrust::counting_iterator<int> begin_noq(0);
 	thrust::counting_iterator<int> end_noq(nk*ns*nK);
+	thrust::counting_iterator<int> begin_sim(0);
+	thrust::counting_iterator<int> end_sim(SIMULPERIOD);
+
+	// generate aggregate shocks
+	cudavec<double> innov_z(SIMULPERIOD);
+	cudavec<double> innov_ssigmax(SIMULPERIOD);
+	cudavec<double> innov_x(nhousehold*SIMULPERIOD);
+	curandGenerator_t gen;
+	curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
+	curandSetPseudoRandomGeneratorSeed(gen, 1234ULL);
+	curandGenerateUniformDouble(gen, innov_z.dptr,       SIMULPERIOD);
+	curandGenerateUniformDouble(gen, innov_ssigmax.dptr, SIMULPERIOD);
+	curandGenerateUniformDouble(gen, innov_x.dptr,       nhousehold*SIMULPERIOD);
+	innov_z.d2h();
+	innov_ssigmax.d2h();
+	curandDestroyGenerator(gen);
+
+	// simulate z and ssigmax index beforehand
+	cudavec<double> z_sim(SIMULPERIOD);
+	cudavec<double> ssigmax_sim(SIMULPERIOD);
+	z_sim.hptr[0] = (nz-1)/2;
+	ssigmax_sim.hptr[0] = (nssigmax-1)/2;
+	for (int t = 1; t < SIMULPERIOD; t++) {
+		z_sim.hptr[t]       = markovdiscrete(z_sim.hptr[t-1],CDF_z.hptr,nz,innov_z.hptr[t]);
+		ssigmax_sim.hptr[t] = markovdiscrete(ssigmax_sim.hptr[t-1],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
+	};
+	z_sim.h2d();
+	ssigmax_sim.h2d();
 
     // Create Timer
 	cudaEvent_t start, stop;
@@ -595,6 +755,11 @@ int main(int argc, char ** argv)
 		std::cout << ++iter << std::endl;
 		std::cout << "=====================" << std::endl;
 	};
+	// VFI ends
+
+	// simulation
+
+
 
 	// Stop Timer
 	cudaEventRecord(stop,NULL);

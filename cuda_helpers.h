@@ -19,14 +19,14 @@ void tauchen(double rrho, double ssigma, T& Z, T& P, double width) {
 
 	// Find P(i_z,1) and P(i_z,end)
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
-	    P[i_z + nzgrid*0]          = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
-	    P[i_z + nzgrid*(nzgrid-1)] = 1 - normcdf( (Z[nzgrid-1]-rrho*Z[i_z]-step/2)/ssigma  );
+		P[i_z + nzgrid*0]          = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
+		P[i_z + nzgrid*(nzgrid-1)] = 1 - normcdf( (Z[nzgrid-1]-rrho*Z[i_z]-step/2)/ssigma  );
 	};
 
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
-	    for (int i_zplus = 1; i_zplus <= nzgrid-2; ++i_zplus) {
+		for (int i_zplus = 1; i_zplus <= nzgrid-2; ++i_zplus) {
             P[i_z+nzgrid*i_zplus] = normcdf( (Z[i_zplus]-rrho*Z[i_z]+step/2)/ssigma  )-normcdf( (Z[i_zplus]-rrho*Z[i_z]-step/2)/ssigma  );
-	    };
+		};
 	};
 };
 
@@ -36,14 +36,14 @@ void tauchen_givengrid(double rrho, double ssigma, T& Z, T& P, double width) {
 	double step = (Z[nzgrid-1] - Z[0])/ double(nzgrid-1);
 
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
-	    P[i_z] = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
-	    P[i_z + nzgrid*(nzgrid-1)] = 1 - normcdf( (Z[nzgrid-1]-rrho*Z[i_z]-step/2)/ssigma  );
+		P[i_z] = normcdf( (Z[0]-rrho*Z[i_z]+step/2)/ssigma  );
+		P[i_z + nzgrid*(nzgrid-1)] = 1 - normcdf( (Z[nzgrid-1]-rrho*Z[i_z]-step/2)/ssigma  );
 	};
 
 	for (int i_z = 0; i_z <= nzgrid-1; ++i_z) {
-	    for (int i_zplus = 1; i_zplus <= nzgrid-2; ++i_zplus) {
+		for (int i_zplus = 1; i_zplus <= nzgrid-2; ++i_zplus) {
             P[i_z+nzgrid*i_zplus] = normcdf( (Z[i_zplus]-rrho*Z[i_z]+step/2)/ssigma  )-normcdf( (Z[i_zplus]-rrho*Z[i_z]-step/2)/ssigma  );
-	    };
+		};
 	};
 };
 
@@ -97,7 +97,7 @@ void ind2sub(int length_size, int* siz_vec, int index, int* subs) {
 	};
 };
 
-// This function fit a valuex x to a grid X of size n.
+// This function fit a valuex x to a increasing grid X of size n.
 // The largest value on grid X that is smaller than x is returned ("left grid point" is returned).
 __host__ __device__
 int fit2grid(const double x, const int n, const double* X) {
@@ -121,6 +121,31 @@ int fit2grid(const double x, const int n, const double* X) {
 	}
 };
 
+// This function fit a valuex x to a increasing grid X of size n.
+// The largest value on grid X that is smaller than x is returned ("left grid point" is returned).
+// grid is accessed with stride s. we are looking at j = 1:n X[stride+j*n]
+__host__ __device__
+int fit2grid(const double x, const int n, const double* X, const int stride) {
+	if (x < X[stride+0*n]) {
+		return 0;
+	} else if (x >= X[stride+(n-1)*n]) {
+		return n-1;
+	} else {
+		int left=0; int right=n-1; int mid=(n-1)/2;
+		while(right-left>1) {
+			mid = (left + right)/2;
+			if (X[stride+mid*n]==x) {
+				return mid;
+			} else if (X[stride+mid*n]<x) {
+				left = mid;
+			} else {
+				right = mid;
+			};
+		};
+		return left;
+	}
+}
+
 // This function fit a valuex x to a "even" grid X of size n. Even means equi-distance among grid points.
 // The largest value on grid X that is smaller than x is returned ("left grid point" is returned).
 __host__ __device__
@@ -130,12 +155,13 @@ int fit2evengrid(const double x, const int n, const double min, const double max
 	double step = (max-min)/(n-1);
 	return floor((x-min)/step);
 };
+
 // This function fit a valuex x to a grid X of size n. For std::vector like stuff
 // The largest value on grid X that is smaller than x is returned ("left grid point" is returned).
 template <class T>
 int fit2grid(const double x, const T X) {
 	int n = X.size();
-	if (x < X[0]) {
+	if (x <= X[0]) {
 		return 0;
 	} else if (x > X[n-1]) {
 		return n-1;
@@ -290,7 +316,7 @@ double newton_bracket(T func, const double x1, const double x2, double x0) {
 		if (
 			( ((rts-xh)*df-f)*((rts-xl)*df-f) > 0.0 )   ||	// Bisect if Newton step out of range
 			( abs(2.0*f) > abs(dxold*df)  ) // ... or step not decreasing fast enough
-		   )
+		)
 		{
 			dxold = dx;
 			dx = 0.5*(xh-xl);
@@ -353,7 +379,7 @@ double newton(T func, const double x1, const double x2, double x0) {
 
 		// Check for convergence
 		if ( (abs(x-x_old)/(1+abs(x_old))<newton_tol) && (abs(func(x)) < newton_tol) ) {
-		   	return x;
+			return x;
 		} else {
 			x_old = x;
 		};
@@ -446,4 +472,39 @@ double chebyeval_multi (const int n_var, double* x, int* size_vec,int* temp_subs
 		eval += (coeff[index]*temp);
 	};
 	return eval;
+};
+
+
+////////////////////////////////////////
+//
+// Some tools for simulation
+//
+////////////////////////////////////////
+
+// a quick and dirty exclusive scan to turn
+// markov transition matrix into CDF matrix
+template<typename T>
+__host__ __device__
+void pdf2cdf(T* P, size_t n, T* CDF) {
+	for (int i_now = 0; i_now < n; i_now++) {
+		CDF[i_now+0*n] = 0;
+		for (unsigned int i_tmr = 1; i_tmr < n; i_tmr++) {
+			CDF[i_now+i_tmr*n] = P[i_now+(i_tmr-1)*n] + CDF[i_now+(i_tmr-1)*n];
+		};
+	};
+};
+
+// draw from a n-state discrete distribution, wit aug-CDF
+// given as a n-by-n array begins with 0 and then cumsum(PDF(1:end)).
+// e.g at i_now = 0, PDF(i_now,:) = [0.2 0.3 0.5], then CDF[i_now,:] = [0 0.2 0.5]
+// also given a random number in [0,1] for inverse CDF.
+template<typename T>
+__host__ __device__
+unsigned int markovdiscrete(unsigned int i_now, T* CDF, size_t n, T u) {
+	for (unsigned int i_tmr = 1; i_tmr < n; i_tmr++) {
+		if ( CDF[i_now+i_tmr*n] > u ) {
+			return i_tmr-1;
+		}
+	};
+	return n-1;
 };
