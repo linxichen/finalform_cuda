@@ -208,7 +208,7 @@ template <class T>
 void display_vec(T vec) {
 	int size = vec.size();
 	for (int i = 0; i < size; i++) {
-		std::printf("The %ith element, @[%i] = %f\n", i+1, i, vec[i]);
+		std::printf("The %ith element, @[%i] = %f\n", i+1, i,vec[i]);
 	};
 };
 
