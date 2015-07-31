@@ -1,3 +1,6 @@
+#ifndef CPPHELPER
+#define CPPHELPER
+
 // This header should only contain routines that can only be compiled by
 // gcc48, for example things utilize std::random, armadillo, and LAPACK
 
@@ -17,3 +20,8 @@ void tauchen_vec(int, int, int, double*, double*, double*, double*, gridgen_fptr
 // void qzdecomp(arma::mat &, arma::mat &, arma::mat &, arma::mat &);
 // void test();
 // void linearQZ(double*, double*, double*, double*, int, int, int, double*);
+
+double levelOLS(double* , double** , int , int , double* );
+double   logOLS(double* , double** , int , int , double* );
+
+#endif

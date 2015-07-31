@@ -1,3 +1,6 @@
+#ifndef MODEL
+#define MODEL
+
 #include "common.h"
 
 // Define an class that contains parameters and steady states
@@ -61,3 +64,5 @@ struct aggrules {
 	double pphi_CC,      pphi_CK,      pphi_Cz,      pphi_Cssigmax;
 	double pphi_tthetaC, pphi_tthetaK, pphi_tthetaz, pphi_tthetassigmax, pphi_tthetaq;
 };
+
+#endif

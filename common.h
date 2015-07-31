@@ -1,13 +1,13 @@
-// Header file that contains things many files needs to know
+#ifndef COMMON
+#define COMMON
 
+// Header file that contains things many files needs to know
 // typedef useful things
 typedef thrust::host_vector<double> h_vec_d;
 typedef thrust::host_vector<int>    h_vec_i;
 typedef thrust::device_vector<double> d_vec_d;
 typedef thrust::device_vector<int>    d_vec_i;
 
-#ifndef DEFVEC
-#define DEFVEC
 // A struct that encompasses host and device vectors
 template<class T>
 struct cudavec {

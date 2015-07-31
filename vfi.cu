@@ -10,6 +10,7 @@
 #define tol 1e-4
 #define outertol 1e-4
 #define damp 0.5
+#define maxconsec 15
 #define maxiter 2000
 #define SIMULPERIOD 1000
 #define nhousehold 10000
@@ -39,6 +40,7 @@
 // Includes, my own creation
 #include "common.h"
 #include "cuda_helpers.h"
+#include "cppcode.h"
 
 // Includes model stuff
 #include "invpricemodel.h"
@@ -279,7 +281,7 @@ struct updateWV
 		double rhsmax = -999999999999999;
 		int koptind_active = 0;
 		for (int i_kplus = 0; i_kplus < nk; i_kplus++) {
-			double convexadj = p.eeta*k*pow((k_grid[i_kplus]-(1-p.ddelta)*k)/k,2);
+			double convexadj = p.eeta*(k_grid[i_kplus]-(1-p.ddelta)*k)*(k_grid[i_kplus]-(1-p.ddelta)*k)/k;
 			double effective_price = (k_grid[i_kplus]>(1-p.ddelta)*k) ? q : p.pphi*q;
 			// compute kinda stupidly EV
 			double EV_inv = EV[i_kplus+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
@@ -380,6 +382,8 @@ struct simulateforward {
 	int*    koptind;
 	int*    active;
 	double* k_grid;
+	double* z_grid;
+	double* x_grid;
 	double  q;
 	double  w;
 	double  mmu;
@@ -389,8 +393,10 @@ struct simulateforward {
 	int     zind;
 	int     ssigmaxind;
 	int*    kind_sim;
-	double*    k_sim;
+	double* k_sim;
 	int*    xind_sim;
+	double* clist;
+	int*    activelist;
 	para    p;
 
 	// constructor
@@ -400,6 +406,8 @@ struct simulateforward {
 		int*    koptind_ptr,
 		int*    active_ptr,
 		double* k_grid_ptr,
+		double* z_grid_ptr,
+		double* x_grid_ptr,
 		double  _q,
 		double  _w,
 		double  _mmu,
@@ -411,30 +419,37 @@ struct simulateforward {
 		int*    kind_sim_ptr,
 		double* k_sim_ptr,
 		int*    xind_sim_ptr,
+		double* clist_ptr,
+		int*    activelist_ptr,
 		para    _p
 	) {
-		kopt        = kopt_ptr;
-		koptind     = koptind_ptr;
-		active      = active_ptr;
-		k_grid      = k_grid_ptr;
-		q           = _q;
-		w           = _w;
-		mmu         = _mmu;
-		matchshock  = matchshock_ptr;
-		Kind        = _Kind;
-		qind        = _qind;
-		zind        = _zind;
-		ssigmaxind  = _ssigmaxind;
-		kind_sim    = kind_sim_ptr;
-		k_sim       = k_sim_ptr;
-		xind_sim    = xind_sim_ptr;
-		p           = _p;
+		kopt       = kopt_ptr;
+		koptind    = koptind_ptr;
+		active     = active_ptr;
+		k_grid     = k_grid_ptr;
+		z_grid     = z_grid_ptr;
+		x_grid     = x_grid_ptr;
+		q          = _q;
+		w          = _w;
+		mmu        = _mmu;
+		matchshock = matchshock_ptr;
+		Kind       = _Kind;
+		qind       = _qind;
+		zind       = _zind;
+		ssigmaxind = _ssigmaxind;
+		kind_sim   = kind_sim_ptr;
+		k_sim      = k_sim_ptr;
+		xind_sim   = xind_sim_ptr;
+		clist      = clist_ptr;
+		activelist = activelist_ptr;
+		p          = _p;
 	}
 
 	// operator to find profit from each household
 	__host__ __device__
 	void operator() (int index) {
 		int kind    = kind_sim[index];
+		double k    = k_grid[kind];
 		int xind    = xind_sim[index];
 		int i_s     = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
@@ -442,10 +457,15 @@ struct simulateforward {
 			kind_sim[index+nhousehold] = active[i_state]*koptind[i_state];
 			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
 		} else {
-			int noinvest_ind = fit2grid((1-p.ddelta)*k_grid[kind],nk,k_grid);
+			int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
 			kind_sim[index+nhousehold] = noinvest_ind;
 			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
 		};
+		double z = z_grid[zind];
+		double x = x_grid[xind];
+		double l = pow( w/z/x/p.v/pow(k,p.aalpha), 1.0/(p.v-1) );
+		clist[index] = z*x*pow(k,p.aalpha)*pow(l,p.v);
+		activelist[index] = active[i_state];
 	};
 };
 
@@ -661,15 +681,13 @@ int main(int argc, char ** argv)
 	curandDestroyGenerator(gen);
 
 	// simulate z and ssigmax index beforehand
-	cudavec<int> zind_sim(SIMULPERIOD);
-	cudavec<int> ssigmaxind_sim(SIMULPERIOD);
-	cudavec<double> z_sim(SIMULPERIOD);
-	cudavec<double> ssigmax_sim(SIMULPERIOD);
-	cudavec<int> xind_sim(nhousehold*SIMULPERIOD,(nx-1)/2);
-	zind_sim.hptr[0] = (nz-1)/2;
-	ssigmaxind_sim.hptr[0] = (nssigmax-1)/2;
+	cudavec<int>    zind_sim(SIMULPERIOD,(nz-1)/2);
+	cudavec<int>    ssigmaxind_sim(SIMULPERIOD,(nssigmax-1)/2);
+	cudavec<int>    xind_sim(nhousehold*SIMULPERIOD,(nx-1)/2);
+	cudavec<double> z_sim(SIMULPERIOD,h_z_grid[(nz-1)/2]);
+	cudavec<double> ssigmax_sim(SIMULPERIOD,h_ssigmax_grid[(nssigmax-1)/2]);
 	for (int t = 1; t < SIMULPERIOD; t++) {
-		zind_sim.hptr[t]       = markovdiscrete(z_sim.hptr[t-1],CDF_z.hptr,nz,innov_z.hptr[t]);
+		zind_sim.hptr[t]       = markovdiscrete(zind_sim.hptr[t-1],CDF_z.hptr,nz,innov_z.hptr[t]);
 		ssigmaxind_sim.hptr[t] = markovdiscrete(ssigmax_sim.hptr[t-1],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
 		z_sim.hptr[t] = h_z_grid[zind_sim.hptr[t]];
 		ssigmax_sim.hptr[t] = h_ssigmax_grid[ssigmaxind_sim.hptr[t]];
@@ -686,6 +704,19 @@ int main(int argc, char ** argv)
 	ssigmaxind_sim.h2d();
 	xind_sim.h2d();
 
+	// intialize simulaiton records
+	cudavec<double> K_sim(SIMULPERIOD,(h_K_grid[0]+h_K_grid[nK-1])/2);
+	cudavec<double> Kind_sim(SIMULPERIOD,(nK-1)/2);
+	cudavec<double> k_sim(nhousehold*SIMULPERIOD,h_k_grid[(nk-1)/2]);
+	cudavec<int>    kind_sim(nhousehold*SIMULPERIOD,(nk-1)/2);
+	cudavec<double> profit_temp(nhousehold,0.0);
+	cudavec<double> clist(nhousehold,0.0);
+	cudavec<int>    activelist(nhousehold,0.0);
+	cudavec<int>    qind_sim(SIMULPERIOD,(nq-1)/2);
+	cudavec<double> q_sim(SIMULPERIOD,h_q_grid[(nq-1)/2]);
+	cudavec<double> C_sim(SIMULPERIOD,0.0);
+	cudavec<double> ttheta_sim(SIMULPERIOD,0.0);
+
     // Create Timer
 	cudaEvent_t start, stop;
 	cudaEventCreate(&start);
@@ -698,6 +729,8 @@ int main(int argc, char ** argv)
 	cublasCreate(&handle);
 	const double alpha = 1.0;
 	const double beta = 0.0;
+
+	double outer_Rsq=0.0;
 
 	// find profit at (i_k,i_s,i_K)
 	thrust::for_each(
@@ -717,7 +750,7 @@ int main(int argc, char ** argv)
 
 	// vfi begins
 	double diff = 10;  int iter = 0; int consec = 0;
-	while ((diff>tol)&&(iter<maxiter)&&(consec<20)){
+	while ((diff>tol)&&(iter<maxiter)&&(consec<maxconsec)){
 		// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
 		cublasDgemm(
 			handle,
@@ -797,15 +830,6 @@ int main(int argc, char ** argv)
 	};
 	// VFI ends //
 
-	// intialize simulaiton records
-	cudavec<double> K_sim(SIMULPERIOD,(h_K_grid[0]+h_K_grid[nK-1])/2);
-	cudavec<double> Kind_sim(SIMULPERIOD,(nK-1)/2);
-	cudavec<double> k_sim(nhousehold*SIMULPERIOD,h_k_grid[(nk-1)/2]);
-	cudavec<int>    kind_sim(nhousehold*SIMULPERIOD,(nk-1)/2);
-	cudavec<double> profit_temp(nhousehold,0.0);
-	cudavec<int>    qind_sim(SIMULPERIOD,2);
-	cudavec<double> q_sim(SIMULPERIOD,2);
-
 	// simulation given policies
 	for (unsigned int t = 0; t < SIMULPERIOD; t++) {
 		// find aggregate K from distribution of k
@@ -865,7 +889,7 @@ int main(int argc, char ** argv)
 
 		// evolution under qmax!
 		double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
-		double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
+		double mmu_temp    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
 		thrust::for_each(
 			begin_hh,
 			end_hh,
@@ -874,9 +898,11 @@ int main(int argc, char ** argv)
 				d_koptind_ptr,
 				d_active_ptr,
 				d_k_grid_ptr,
+				d_z_grid_ptr,
+				d_x_grid_ptr,
 				qmax,
 				w,
-				mmu,
+				mmu_temp,
 				matchshock_ptr,
 				Kind_sim[t],
 				i_qmax,
@@ -885,12 +911,45 @@ int main(int argc, char ** argv)
 				kindlist_ptr,
 				klist_ptr,
 				xindlist_ptr,
+				clist.dptr,
+				activelist.dptr,
 				p
 			)
 		);
+
+		// find aggregate C and active ttheta
+		C_sim[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
+		int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
+		ttheta_sim[t]   = double(nhousehold)/double(activecount);
 	};
 
-	// construct regression matrices
+	// regression
+	double bbeta[5];
+	double* X[4];
+	X[0] = K_sim.hptr;
+	X[1] = z_sim.hptr;
+	X[2] = ssigmax_sim.hptr;
+	X[3] = q_sim.hptr;
+
+	// run each regression and report
+	double Rsq_K = logOLS(K_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
+	r.pphi_KC = bbeta[0]; r.pphi_KK = bbeta[1]; r.pphi_Kz = bbeta[2]; r.pphi_Kssigmax = bbeta[3];
+	printf("Rsq_K = %f, log(Kplus) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z).\n",Rsq_K,r.pphi_KC,r.pphi_KK,r.pphi_Kssigmax,r.pphi_Kz);
+
+	double Rsq_q = logOLS(q_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
+	r.pphi_qC = bbeta[0]; r.pphi_qK = bbeta[1]; r.pphi_qz = bbeta[2]; r.pphi_qssigmax = bbeta[3];
+	printf("Rsq_q = %f, log(qplus) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z).\n",Rsq_q,r.pphi_qC,r.pphi_qK,r.pphi_qssigmax,r.pphi_qz);
+
+	double Rsq_C = logOLS(C_sim.hptr,X,SIMULPERIOD,3,bbeta);
+	r.pphi_CC = bbeta[0]; r.pphi_CK = bbeta[1]; r.pphi_Cz = bbeta[2]; r.pphi_Cssigmax = bbeta[3];
+	printf("Rsq_C = %f, log(C) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z).\n",Rsq_C,r.pphi_CC,r.pphi_CK,r.pphi_Cssigmax,r.pphi_Cz);
+
+	double Rsq_ttheta = logOLS(ttheta_sim.hptr,X,SIMULPERIOD,4,bbeta);
+	r.pphi_tthetaC = bbeta[0]; r.pphi_tthetaK = bbeta[1]; r.pphi_tthetaz = bbeta[2]; r.pphi_tthetassigmax = bbeta[3]; r.pphi_tthetaq = bbeta[4];
+	printf("Rsq_ttheta = %f, log(ttheta) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z) + %f*log(q).\n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetaK,r.pphi_tthetassigmax,r.pphi_tthetaz,r.pphi_tthetaq);
+
+	outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_ttheta));
+
 
 	// Stop Timer
 	cudaEventRecord(stop,NULL);

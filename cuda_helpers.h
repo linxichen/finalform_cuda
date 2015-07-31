@@ -1,3 +1,6 @@
+#ifndef CUDAHELPER
+#define CUDAHELPER
+
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -508,3 +511,5 @@ unsigned int markovdiscrete(unsigned int i_now, T* CDF, size_t n, T u) {
 	};
 	return n-1;
 };
+
+#endif
