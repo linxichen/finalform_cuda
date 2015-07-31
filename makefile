@@ -3,6 +3,8 @@ ICUDA    = /usr/local/cuda-7.0/include
 LCUDA    = /usr/local/cuda-7.0/lib64
 ICUDA_MAC = /Developer/NVIDIA/CUDA-7.0/include
 LCUDA_MAC = /Developer/NVIDIA/CUDA-7.0/lib
+ICPP_MAC = /usr/local/include
+LCPP_MAC = /usr/local/lib
 ILAPACK = /usr/include/lapacke
 
 SDIR     = .
@@ -13,16 +15,16 @@ LDIR     = .
 NVCC      = nvcc
 
 # CUDA compiling options
-NVCCFLAGS =  -arch sm_30 #-use_fast_math
+NVCCFLAGS =  -arch sm_30 -O3 #-use_fast_math
 
 # Compiler for C code
 CXX       = g++
 
 # Standard optimization flags to C++ compiler
-CXXFLAGS  = -O3 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
+CXXFLAGS  = -O3 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
 
 # Add CUDA libraries to C++ compiler linking process
-LDFLAGS  += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -std=c++11 -L$(LCUDA) -L$(LCUDA_MAC)
+LDFLAGS  += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapacke -llapack -std=c++11 -L$(LCUDA) -L$(LCUDA_MAC)
 
 # List Executables and Objects
 EXEC = vfi
@@ -30,12 +32,16 @@ EXEC = vfi
 all : $(EXEC)
 
 # Link objects from CUDA and C++ codes
-vfi : vfi.o
+vfi : vfi.o cppcode.o
 	$(NVCC) -o $@ $? $(LDFLAGS)
 
 # Compile CUDA code
 vfi.o : vfi.cu
 	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -c $<
+
+# Compile C++ code
+cppcode.o : cppcode.cpp
+	$(CXX) $(CXXFLAGS) -c -std=c++11  $<
 
 clean :
 	rm -f *.o

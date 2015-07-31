@@ -2,30 +2,31 @@
 #include <complex>
 #include <iostream>
 #include <thrust/host_vector.h>
-#include "armadillo"
+#include <armadillo>
 #include <lapacke.h>
+#include "cppcode.h"
 
 using namespace arma;
 using namespace std;
 
 void mynormalcpp(double* output, double mmu, double ssigma, int n, unsigned seed) {
-	
+
 	// Specify engine and distribution
 	std::default_random_engine generator(seed);
 	std::normal_distribution<double> distribution(mmu,ssigma);
 
 	// Actually generate random numbers
-	for (int i=0; i<n; i++) {	
+	for (int i=0; i<n; i++) {
 		output[i] = distribution(generator);
 	};
-	
+
 };
 
 void myuniformcpp(double* output, int n, unsigned seed)
 {
 	std::default_random_engine generator(seed);
     std::uniform_real_distribution<double> d(0,1);
-    
+
 	for (int i=0; i<n; i++) {
 		output[i] = d(generator);
 	};
@@ -35,7 +36,7 @@ void myexponentialcpp(double* output, int n, unsigned seed)
 {
 	std::default_random_engine generator(seed);
     std::exponential_distribution<double> d(1.0);
-    
+
 	for (int i=0; i<n; i++) {
 		output[i] = d(generator);
 	};
@@ -56,20 +57,12 @@ int chebyroots_cpp(const int p, double* roots) {
 
 void fromchebydomain(double lb, double ub, int p, double* ptr) {
 	for (int i=0; i<p; i++) {
-		ptr[i] = lb + (ptr[i]+1)/(2)*(ub-lb);	
+		ptr[i] = lb + (ptr[i]+1)/(2)*(ub-lb);
 	};
 };
 
 double mynormalcdf(double mean, double variance, double x) {
 	return 0.5*( 1+erf( (x-mean)/sqrt(2*variance) ) );
-};
-
-// Create a equal-distance grid
-void linspace(double min, double max, int N, double* grid) {
-	double step  = (max-min)/(N-1);
-	for (int i = 0; i < N; i++) {
-		grid[i] = min + step*i;
-	};
 };
 
 // Create a grid based on chebyshev roots
@@ -91,13 +84,13 @@ void tauchen_vec(int M, int N, int m, double* A_ptr, double* Ssigma_e_ptr, doubl
 //
 // Input:		M = # of shocks
 // 				N = # of grid points for each shock
-// 				m = # of s.d. away from mean should we use as bounds 
-// 				A = Autocorrelation matrix, stored in array 
+// 				m = # of s.d. away from mean should we use as bounds
+// 				A = Autocorrelation matrix, stored in array
 // 				Ssigma_e = variance-convariance matrix, stored in array
 //
 // Output:		Z = Vectorized N by M matrix where each column stores grids
 // 				P = Vectorized transition matrix (N^M by N^M)
-	
+
 	// 1. Read in matrices
 	mat A(M,M);
 	mat Ssigma_e(M,M);
@@ -147,15 +140,14 @@ void tauchen_vec(int M, int N, int m, double* A_ptr, double* Ssigma_e_ptr, doubl
 					w_right = grids(i,l+1) - grids(i,l);
 					h(i,j,l) = mynormalcdf(0,Ssigma_e(i,i),grids(i,l)-mmu(i)+w_right/2);
 				}
-			   	else if (l==N-1) {
+				else if (l==N-1) {
 					w_left = grids(i,l) - grids(i,l-1);
 					h(i,j,l) = 1 - mynormalcdf(0,Ssigma_e(i,i),grids(i,l)-mmu(i)-w_left/2);
 				}
-			   	else {
+				else {
 					w_left = grids(i,l) - grids(i,l-1);
 					w_right = grids(i,l+1) - grids(i,l);
-					h(i,j,l) = mynormalcdf(0,Ssigma_e(i,i),grids(i,l)-mmu(i)+w_right/2)
-							 - mynormalcdf(0,Ssigma_e(i,i),grids(i,l)-mmu(i)-w_left/2);
+					h(i,j,l) = mynormalcdf(0,Ssigma_e(i,i),grids(i,l)-mmu(i)+w_right/2) - mynormalcdf(0,Ssigma_e(i,i),grids(i,l)-mmu(i)-w_left/2);
 				};
 			};
 		};
@@ -171,12 +163,12 @@ void tauchen_vec(int M, int N, int m, double* A_ptr, double* Ssigma_e_ptr, doubl
 		};
 	};
 	vec rowsum = sum(P,1);
-	
+
 	// 5. Check Accuracy
 	arma_rng::set_seed(51709394);
 	int T = 1e3;
 	mat eps(M,T);
-	for (int i_shock=0; i_shock<M; i_shock++) { 
+	for (int i_shock=0; i_shock<M; i_shock++) {
 		eps(i_shock,span::all) = trans(sqrt(Ssigma_e(i_shock,i_shock))*randn<vec>(T));
 	};
 	mat sim_y = zeros<mat>(M,T);
@@ -199,7 +191,7 @@ void tauchen_vec(int M, int N, int m, double* A_ptr, double* Ssigma_e_ptr, doubl
 	};
 	double* P_out_ptr = P.memptr();
 	for (int index=0; index<pow(N,M)*pow(N,M); index++) {
-		P_ptr[index] = P_out_ptr[index]; 
+		P_ptr[index] = P_out_ptr[index];
 	};
 };
 
@@ -207,15 +199,16 @@ void findprojector(double* X_ptr, int nrows, int ncols, double * P_ptr) {
 	mat X(X_ptr, nrows, ncols, false, false);
 	mat XprimeX = diagmat(trans(X)*X);
 	mat P = inv(XprimeX)*trans(X);
-	
+
 	for (int i=0; i<nrows*ncols; i++) {
 		P_ptr[i] = P.memptr()[i];
 	};
 
 };
 
+/*
 lapack_logical qzdivide(const complex<double>* alpha, const complex<double>* beta) {
-	// As in Sims and Klein, our Generalised eigenvalues are defined as b/a 
+	// As in Sims and Klein, our Generalised eigenvalues are defined as b/a
 	complex<double> a = * alpha;
 	complex<double> b = * beta;
 	complex<double> zero(0,0);
@@ -243,15 +236,15 @@ int qzdecomp (cx_mat &A, cx_mat &B, cx_mat &Q, cx_mat &Z) {
 	int n_selected;
 	cx_vec alpha(A.n_rows);
 	cx_vec beta(B.n_rows);
-	lapack_int info;	// stores the exit information 
-	LAPACK_Z_SELECT2 selctg = qzdivide; 
+	lapack_int info;	// stores the exit information
+	LAPACK_Z_SELECT2 selctg = qzdivide;
 	A.print("Inputted A matrix:");
 	B.print("Inputted B matrix:");
 
 	// Call LAPACK
 	info = LAPACKE_zgges(
 			LAPACK_COL_MAJOR,	// indicate we use column major
-			'V',				// ... and compute left schur vector 
+			'V',				// ... and compute left schur vector
 			'V',				// ... and compute right schur vector
 			'S',				// ... and sort eigenvalues
 			selctg,				// with this func to divide eigenvalues
@@ -260,7 +253,7 @@ int qzdecomp (cx_mat &A, cx_mat &B, cx_mat &Q, cx_mat &Z) {
 			A.n_rows,			// leading dimension of A (rows)
 			B.memptr(),			// array that stores B
 			B.n_rows,			// rows of B
-			&n_selected,		// output the # of eigenvalues 
+			&n_selected,		// output the # of eigenvalues
 			alpha.memptr(),	// stores aux vectors
 			beta.memptr(),		// stores aux vector
 			Q.memptr(),			// stores Q
@@ -268,7 +261,7 @@ int qzdecomp (cx_mat &A, cx_mat &B, cx_mat &Q, cx_mat &Z) {
 			Z.memptr(),
 			B.n_rows
 			);
-	
+
 	// Transpose Q consistent with Klein's notation.
 	Q = trans(Q);
 
@@ -294,7 +287,7 @@ int qzdecomp (cx_mat &A, cx_mat &B, cx_mat &Q, cx_mat &Z) {
 	cx_mat Btilde = trans(Q)*B*trans(Z);
 	Btilde.print("Btilde = ");
 
-	
+
 	// Compute the number of unstable roots (in lower right of inv(S)*T)
 	return A.n_rows - n_selected;
 };
@@ -313,11 +306,11 @@ void linearQZ(double* A_ptr, double* B_ptr, double* C_ptr, double* rrho_ptr, int
 	mat B_real(B_ptr,n,n) ;
 	mat C_real(C_ptr,n,n_shock) ;
 	mat rrho_real(rrho_ptr,n_shock,n_shock) ;
-	cx_mat A = conv_to<cx_mat>::from(A_real); 
-	cx_mat B = conv_to<cx_mat>::from(B_real); 
-	cx_mat C = conv_to<cx_mat>::from(C_real); 
-	cx_mat rrho = conv_to<cx_mat>::from(rrho_real); 
-	
+	cx_mat A = conv_to<cx_mat>::from(A_real);
+	cx_mat B = conv_to<cx_mat>::from(B_real);
+	cx_mat C = conv_to<cx_mat>::from(C_real);
+	cx_mat rrho = conv_to<cx_mat>::from(rrho_real);
+
 	// Call QZ decomposition
 	cx_mat S = A;
 	cx_mat T = B;
@@ -339,7 +332,7 @@ void linearQZ(double* A_ptr, double* B_ptr, double* C_ptr, double* rrho_ptr, int
 	cx_mat S12 = S(span(0,n-n_jump-1),span(n-n_jump,n-1));
 	cx_mat S21 = S(span(n-n_jump,n-1),span(0,n-n_jump-1));
 	cx_mat S22 = S(span(n-n_jump,n-1),span(n-n_jump,n-1));
-	
+
 	cx_mat T11 = T(span(0,n-n_jump-1),span(0,n-n_jump-1));
 	cx_mat T12 = T(span(0,n-n_jump-1),span(n-n_jump,n-1));
 	cx_mat T21 = T(span(n-n_jump,n-1),span(0,n-n_jump-1));
@@ -359,9 +352,9 @@ void linearQZ(double* A_ptr, double* B_ptr, double* C_ptr, double* rrho_ptr, int
 	cx_mat N = (Z22-Z21*inv(Z11)*Z12)*M;
 	cx_mat L = -Z11*inv(S11)*T11*inv(Z11)*Z12*M + Z11*inv(S11)*(T12*M-S12*M*rrho+Q1*C) + Z12*M*rrho;
 	cx_mat Pphi_c_k = Z21*inv(Z11);
-	cx_mat Pphi_c_z = N; 
-	cx_mat Pphi_k_k = Z11*inv(S11)*T11*inv(Z11); 
-	cx_mat Pphi_k_z = L; 
+	cx_mat Pphi_c_z = N;
+	cx_mat Pphi_k_k = Z11*inv(S11)*T11*inv(Z11);
+	cx_mat Pphi_k_z = L;
 	cx_mat Pphi_cx = join_cols( join_rows(Pphi_k_k,Pphi_k_z), join_rows(Pphi_c_k,Pphi_c_z)  );
 	mat Pphi = conv_to<mat>::from(Pphi_cx);
 	Pphi.print("The solution matrix is: ");
@@ -371,3 +364,4 @@ void linearQZ(double* A_ptr, double* B_ptr, double* C_ptr, double* rrho_ptr, int
 		Pphi_ptr[i] = Pphi.memptr()[i];
 	};
 };
+*/

@@ -34,11 +34,11 @@
 
 // Includes, cuda
 #include <cublas_v2.h>
-#include "cuda_helpers.h"
 #include <curand.h>
 
 // Includes, my own creation
 #include "common.h"
+#include "cuda_helpers.h"
 
 // Includes model stuff
 #include "invpricemodel.h"
@@ -889,7 +889,8 @@ int main(int argc, char ** argv)
 			)
 		);
 	};
-	display_vec(q_sim);
+
+	// construct regression matrices
 
 	// Stop Timer
 	cudaEventRecord(stop,NULL);
