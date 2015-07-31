@@ -1,14 +1,14 @@
-#define nk 100
+#define nk 250
 #define nx 7
 #define nz 7
 #define nssigmax 2
 #define ns nx*nz*nssigmax
 #define nK 25
-#define nq 25
-#define nmarkup 15
+#define nq 50
+#define nmarkup 50
 #define tauchenwidth 2.5
-#define tol 1e-2
-#define outertol 1e-2
+#define tol 1e-4
+#define outertol 1e-4
 #define damp 0.5
 #define maxiter 2000
 #define SIMULPERIOD 1000
@@ -373,6 +373,82 @@ struct profitfromhh {
 	};
 };
 
+// finds profit generated from each household i at time t
+struct simulateforward {
+	// data members
+	double* kopt;
+	int*    koptind;
+	int*    active;
+	double* k_grid;
+	double  q;
+	double  w;
+	double  mmu;
+	double* matchshock;
+	int     Kind;
+	int     qind;
+	int     zind;
+	int     ssigmaxind;
+	int*    kind_sim;
+	double*    k_sim;
+	int*    xind_sim;
+	para    p;
+
+	// constructor
+	__host__ __device__
+	simulateforward(
+		double* kopt_ptr,
+		int*    koptind_ptr,
+		int*    active_ptr,
+		double* k_grid_ptr,
+		double  _q,
+		double  _w,
+		double  _mmu,
+		double* matchshock_ptr,
+		int     _Kind,
+		int     _qind,
+		int     _zind,
+		int     _ssigmaxind,
+		int*    kind_sim_ptr,
+		double* k_sim_ptr,
+		int*    xind_sim_ptr,
+		para    _p
+	) {
+		kopt        = kopt_ptr;
+		koptind     = koptind_ptr;
+		active      = active_ptr;
+		k_grid      = k_grid_ptr;
+		q           = _q;
+		w           = _w;
+		mmu         = _mmu;
+		matchshock  = matchshock_ptr;
+		Kind        = _Kind;
+		qind        = _qind;
+		zind        = _zind;
+		ssigmaxind  = _ssigmaxind;
+		kind_sim    = kind_sim_ptr;
+		k_sim       = k_sim_ptr;
+		xind_sim    = xind_sim_ptr;
+		p           = _p;
+	}
+
+	// operator to find profit from each household
+	__host__ __device__
+	void operator() (int index) {
+		int kind    = kind_sim[index];
+		int xind    = xind_sim[index];
+		int i_s     = xind + zind*nx + ssigmaxind*nx*nz;
+		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
+		if (matchshock[index] < mmu) {
+			kind_sim[index+nhousehold] = active[i_state]*koptind[i_state];
+			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
+		} else {
+			int noinvest_ind = fit2grid((1-p.ddelta)*k_grid[kind],nk,k_grid);
+			kind_sim[index+nhousehold] = noinvest_ind;
+			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
+		};
+	};
+};
+
 // This unctor calculates the distance
 struct myDist {
 	// Tple is (V1low,Vplus1low,V1high,Vplus1high,...)
@@ -469,6 +545,7 @@ int main(int argc, char ** argv)
 	for (int i_x = 0; i_x < nx; i_x++) {
 		h_x_grid[i_x] = exp(h_logX[i_x]);
 	};
+
 	// find combined transition matrix P
 	for (int i_s = 0; i_s < ns; i_s++) {
 		int i_ssigmax = i_s/(nx*nz);
@@ -580,13 +657,15 @@ int main(int argc, char ** argv)
 	curandGenerateUniformDouble(gen, innov_match.dptr,   nhousehold*SIMULPERIOD);
 	innov_z.d2h();
 	innov_ssigmax.d2h();
+	innov_x.d2h();
 	curandDestroyGenerator(gen);
 
 	// simulate z and ssigmax index beforehand
-	cudavec<double> zind_sim(SIMULPERIOD);
-	cudavec<double> ssigmaxind_sim(SIMULPERIOD);
+	cudavec<int> zind_sim(SIMULPERIOD);
+	cudavec<int> ssigmaxind_sim(SIMULPERIOD);
 	cudavec<double> z_sim(SIMULPERIOD);
 	cudavec<double> ssigmax_sim(SIMULPERIOD);
+	cudavec<int> xind_sim(nhousehold*SIMULPERIOD,(nx-1)/2);
 	zind_sim.hptr[0] = (nz-1)/2;
 	ssigmaxind_sim.hptr[0] = (nssigmax-1)/2;
 	for (int t = 1; t < SIMULPERIOD; t++) {
@@ -594,10 +673,18 @@ int main(int argc, char ** argv)
 		ssigmaxind_sim.hptr[t] = markovdiscrete(ssigmax_sim.hptr[t-1],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
 		z_sim.hptr[t] = h_z_grid[zind_sim.hptr[t]];
 		ssigmax_sim.hptr[t] = h_ssigmax_grid[ssigmaxind_sim.hptr[t]];
+		for (int i_household = 0; i_household < nhousehold; i_household++) {
+			if (ssigmax_sim.hptr[t-1]==0) {
+				xind_sim[i_household+t*nhousehold] = markovdiscrete(xind_sim[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+			};
+			if (ssigmax_sim.hptr[t-1]==1) {
+				xind_sim[i_household+t*nhousehold] = markovdiscrete(xind_sim[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+			};
+		};
 	};
 	zind_sim.h2d();
 	ssigmaxind_sim.h2d();
-	display_vec(z_sim);
+	xind_sim.h2d();
 
     // Create Timer
 	cudaEvent_t start, stop;
@@ -715,18 +802,22 @@ int main(int argc, char ** argv)
 	cudavec<double> Kind_sim(SIMULPERIOD,(nK-1)/2);
 	cudavec<double> k_sim(nhousehold*SIMULPERIOD,h_k_grid[(nk-1)/2]);
 	cudavec<int>    kind_sim(nhousehold*SIMULPERIOD,(nk-1)/2);
-	cudavec<int>    xind_sim(nhousehold*SIMULPERIOD,(nx-1)/2);
 	cudavec<double> profit_temp(nhousehold,0.0);
 	cudavec<int>    qind_sim(SIMULPERIOD,2);
+	cudavec<double> q_sim(SIMULPERIOD,2);
 
 	// simulation given policies
 	for (unsigned int t = 0; t < SIMULPERIOD; t++) {
+		// find aggregate K from distribution of k
+		K_sim[t] =  thrust::reduce(k_sim.dvec.begin()+t*nhousehold, k_sim.dvec.begin()+nhousehold+t*nhousehold, (double) 0, thrust::plus<double>())/nhousehold;
+
 		// find current wage from aggregate things
 		double C = exp( r.pphi_CC + r.pphi_CK*log(K_sim.hvec[t]) + r.pphi_Cssigmax*log(ssigmax_sim.hvec[t]) + r.pphi_Cz*log(z_sim.hvec[t]) );
 		double w = p.ppsi_n*C;
 		double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold);
-		int* klist_ptr          = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold);
-		int* xlist_ptr          = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold);
+		int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold);
+		double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold);
+		int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold);
 
 		// given markup find optimal price for monopolist
 		double profitmax = -9999999;
@@ -754,8 +845,8 @@ int main(int argc, char ** argv)
 					i_q,
 					zind_sim.hvec[t],
 					ssigmaxind_sim.hvec[t],
-					klist_ptr,
-					xlist_ptr,
+					kindlist_ptr,
+					xindlist_ptr,
 					p,
 					profit_temp.dptr
 				)
@@ -769,10 +860,36 @@ int main(int argc, char ** argv)
 			};
 		}
 		qind_sim[t] = i_qmax;
+		double qmax = h_q_grid[i_qmax];
+		q_sim[t] = qmax;
 
 		// evolution under qmax!
-
+		double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
+		double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
+		thrust::for_each(
+			begin_hh,
+			end_hh,
+			simulateforward(
+				d_kopt_ptr,
+				d_koptind_ptr,
+				d_active_ptr,
+				d_k_grid_ptr,
+				qmax,
+				w,
+				mmu,
+				matchshock_ptr,
+				Kind_sim[t],
+				i_qmax,
+				zind_sim.hvec[t],
+				ssigmaxind_sim.hvec[t],
+				kindlist_ptr,
+				klist_ptr,
+				xindlist_ptr,
+				p
+			)
+		);
 	};
+	display_vec(q_sim);
 
 	// Stop Timer
 	cudaEventRecord(stop,NULL);
