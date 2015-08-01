@@ -384,6 +384,10 @@ double levelOLS(double* Y_ptr, double** X_ptrptr, int nobs, int nrhs, double* bb
 	vec bbeta = solve( trans(X)*X, trans(X)*Y );
 	vec e = Y-X*bbeta;
 	vec ytilde = Y-ones(nobs,1)*mean(Y);
+	// output bbeta and Rsq
+	for (int i_term = 0; i_term < nrhs+1; i_term++) {
+		bbeta_ptr[i_term] = bbeta(i_term);
+	}
 	return 1.0 - (dot(e,e))/(dot(ytilde,ytilde));
 }
 
@@ -402,5 +406,10 @@ double logOLS(double* Y_ptr, double** X_ptrptr, int nobs, int nrhs, double* bbet
 	vec bbeta = solve( trans(X)*X, trans(X)*Y );
 	vec e = Y-X*bbeta;
 	vec ytilde = Y-ones(nobs,1)*mean(Y);
+
+	// output bbeta and Rsq
+	for (int i_term = 0; i_term < nrhs+1; i_term++) {
+		bbeta_ptr[i_term] = bbeta(i_term);
+	}
 	return 1.0 - (dot(e,e))/(dot(ytilde,ytilde));
 }

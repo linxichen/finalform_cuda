@@ -616,6 +616,7 @@ int main(int argc, char ** argv)
 	r.pphi_tthetaz = 0.0;
 	r.pphi_tthetassigmax = 0.0;
 	r.pphi_tthetaq = 0.1;// lower q -- more firms invest -- lower ttheta
+	r.loadfromfile("./results/aggrules.csv");
 
 	// Copy to the device
 	d_vec_d d_k_grid       = h_k_grid;
@@ -704,6 +705,12 @@ int main(int argc, char ** argv)
 	ssigmaxind_sim.h2d();
 	xind_sim.h2d();
 
+	// Prepare for cuBLAS things
+	cublasHandle_t handle;
+	cublasCreate(&handle);
+	const double alpha = 1.0;
+	const double beta = 0.0;
+
 	// intialize simulaiton records
 	cudavec<double> K_sim(SIMULPERIOD,(h_K_grid[0]+h_K_grid[nK-1])/2);
 	cudavec<double> Kind_sim(SIMULPERIOD,(nK-1)/2);
@@ -717,249 +724,250 @@ int main(int argc, char ** argv)
 	cudavec<double> C_sim(SIMULPERIOD,0.0);
 	cudavec<double> ttheta_sim(SIMULPERIOD,0.0);
 
-    // Create Timer
-	cudaEvent_t start, stop;
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
-    // Start Timer
-	cudaEventRecord(start,NULL);
-
-	// Prepare for cuBLAS things
-	cublasHandle_t handle;
-	cublasCreate(&handle);
-	const double alpha = 1.0;
-	const double beta = 0.0;
-
 	double outer_Rsq=0.0;
+	while (outer_Rsq < 0.9) {
 
-	// find profit at (i_k,i_s,i_K)
-	thrust::for_each(
-		begin_noq,
-		end_noq,
-		updateprofit(
-			d_profit_ptr,
-			d_k_grid_ptr,
-			d_K_grid_ptr,
-			d_x_grid_ptr,
-			d_z_grid_ptr,
-			d_ssigmax_grid_ptr,
-			p,
-			r
-		)
-	);
+		// Create Timer
+		cudaEvent_t start, stop;
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+		// Start Timer
+		cudaEventRecord(start,NULL);
 
-	// vfi begins
-	double diff = 10;  int iter = 0; int consec = 0;
-	while ((diff>tol)&&(iter<maxiter)&&(consec<maxconsec)){
-		// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
-		cublasDgemm(
-			handle,
-			CUBLAS_OP_N,
-			CUBLAS_OP_T,
-			nk*nK*nq,
-			ns,
-			ns,
-			&alpha,
-			d_V_ptr,
-			nk*nK*nq,
-			d_P_ptr,
-			ns,
-			&beta,
-			d_EV_ptr,
-			nk*nK*nq
-		);
-
-		// find W/V currently
+		// find profit at (i_k,i_s,i_K)
 		thrust::for_each(
-			begin,
-			end,
-			updateWV(
+			begin_noq,
+			end_noq,
+			updateprofit(
 				d_profit_ptr,
 				d_k_grid_ptr,
 				d_K_grid_ptr,
 				d_x_grid_ptr,
 				d_z_grid_ptr,
 				d_ssigmax_grid_ptr,
-				d_q_grid_ptr,
-				d_EV_ptr,
-				d_W_ptr,
-				d_U_ptr,
-				d_V_ptr,
-				d_Vplus_ptr,
-				d_kopt_ptr,
-				d_active_ptr,
-				d_koptindplus_ptr,
 				p,
 				r
 			)
 		);
 
-		// Find diff
-		diff = thrust::transform_reduce(
-			thrust::make_zip_iterator(thrust::make_tuple(d_V.begin(),d_Vplus.begin())),
-			thrust::make_zip_iterator(thrust::make_tuple(d_V.end()  ,d_Vplus.end())),
-			myDist(),
-			0.0,
-			thrust::maximum<double>()
-		);
+		// vfi begins
+		double diff = 10;  int iter = 0; int consec = 0;
+		while ((diff>tol)&&(iter<maxiter)&&(consec<maxconsec)){
+			// Find EV = V*tran(P), EV is EV(i_kplus,i_Kplus,i_qplus,i_s)
+			cublasDgemm(
+				handle,
+				CUBLAS_OP_N,
+				CUBLAS_OP_T,
+				nk*nK*nq,
+				ns,
+				ns,
+				&alpha,
+				d_V_ptr,
+				nk*nK*nq,
+				d_P_ptr,
+				ns,
+				&beta,
+				d_EV_ptr,
+				nk*nK*nq
+			);
 
-		// Check how many consecutive periods policy hasn't change
-		int policy_diff = thrust::transform_reduce(
-			thrust::make_zip_iterator(thrust::make_tuple(d_koptind.begin(),d_koptindplus.begin())),
-			thrust::make_zip_iterator(thrust::make_tuple(d_koptind.end()  ,d_koptindplus.end())),
-			myDist(),
-			0.0,
-			thrust::maximum<int>()
-		);
-		if (policy_diff == 0) {
-			consec++;
-		} else {
-			consec = 0;
-		};
-
-
-		std::cout << "diff is: "<< diff << std::endl;
-		std::cout << "consec is: "<< consec << std::endl;
-
-		// update correspondence
-		d_V       = d_Vplus;
-		d_koptind = d_koptindplus;
-
-		std::cout << ++iter << std::endl;
-		std::cout << "=====================" << std::endl;
-	};
-	// VFI ends //
-
-	// simulation given policies
-	for (unsigned int t = 0; t < SIMULPERIOD; t++) {
-		// find aggregate K from distribution of k
-		K_sim[t] =  thrust::reduce(k_sim.dvec.begin()+t*nhousehold, k_sim.dvec.begin()+nhousehold+t*nhousehold, (double) 0, thrust::plus<double>())/nhousehold;
-
-		// find current wage from aggregate things
-		double C = exp( r.pphi_CC + r.pphi_CK*log(K_sim.hvec[t]) + r.pphi_Cssigmax*log(ssigmax_sim.hvec[t]) + r.pphi_Cz*log(z_sim.hvec[t]) );
-		double w = p.ppsi_n*C;
-		double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold);
-		int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold);
-		double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold);
-		int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold);
-
-		// given markup find optimal price for monopolist
-		double profitmax = -9999999;
-		int i_qmax = 0;
-		for (unsigned int i_markup = 0; i_markup < nmarkup; i_markup++) {
-			// find current variables
-			double q           = h_markup_grid[i_markup]*w;
-			int i_q            = fit2grid(q, nq, thrust::raw_pointer_cast(h_q_grid.data()));
-			double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(q) );
-			double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
-
-			// compute profit from each hh
+			// find W/V currently
 			thrust::for_each(
-				begin_hh,
-				end_hh,
-				profitfromhh(
+				begin,
+				end,
+				updateWV(
+					d_profit_ptr,
+					d_k_grid_ptr,
+					d_K_grid_ptr,
+					d_x_grid_ptr,
+					d_z_grid_ptr,
+					d_ssigmax_grid_ptr,
+					d_q_grid_ptr,
+					d_EV_ptr,
+					d_W_ptr,
+					d_U_ptr,
+					d_V_ptr,
+					d_Vplus_ptr,
 					d_kopt_ptr,
 					d_active_ptr,
-					d_k_grid_ptr,
-					q,
-					w,
-					mmu,
-					matchshock_ptr,
-					Kind_sim[t],
-					i_q,
-					zind_sim.hvec[t],
-					ssigmaxind_sim.hvec[t],
-					kindlist_ptr,
-					xindlist_ptr,
+					d_koptindplus_ptr,
 					p,
-					profit_temp.dptr
+					r
 				)
 			);
 
-			// sum over profit to find total profit
-			double totprofit = thrust::reduce(profit_temp.dvec.begin(), profit_temp.dvec.end(), (double) 0, thrust::plus<double>());
-			if (totprofit > profitmax) {
-				profitmax = totprofit;
-				i_qmax    = i_q;
+			// Find diff
+			diff = thrust::transform_reduce(
+				thrust::make_zip_iterator(thrust::make_tuple(d_V.begin(),d_Vplus.begin())),
+				thrust::make_zip_iterator(thrust::make_tuple(d_V.end()  ,d_Vplus.end())),
+				myDist(),
+				0.0,
+				thrust::maximum<double>()
+			);
+
+			// Check how many consecutive periods policy hasn't change
+			int policy_diff = thrust::transform_reduce(
+				thrust::make_zip_iterator(thrust::make_tuple(d_koptind.begin(),d_koptindplus.begin())),
+				thrust::make_zip_iterator(thrust::make_tuple(d_koptind.end()  ,d_koptindplus.end())),
+				myDist(),
+				0.0,
+				thrust::maximum<int>()
+			);
+			if (policy_diff == 0) {
+				consec++;
+			} else {
+				consec = 0;
 			};
-		}
-		qind_sim[t] = i_qmax;
-		double qmax = h_q_grid[i_qmax];
-		q_sim[t] = qmax;
-
-		// evolution under qmax!
-		double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
-		double mmu_temp    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
-		thrust::for_each(
-			begin_hh,
-			end_hh,
-			simulateforward(
-				d_kopt_ptr,
-				d_koptind_ptr,
-				d_active_ptr,
-				d_k_grid_ptr,
-				d_z_grid_ptr,
-				d_x_grid_ptr,
-				qmax,
-				w,
-				mmu_temp,
-				matchshock_ptr,
-				Kind_sim[t],
-				i_qmax,
-				zind_sim.hvec[t],
-				ssigmaxind_sim.hvec[t],
-				kindlist_ptr,
-				klist_ptr,
-				xindlist_ptr,
-				clist.dptr,
-				activelist.dptr,
-				p
-			)
-		);
-
-		// find aggregate C and active ttheta
-		C_sim[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
-		int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
-		ttheta_sim[t]   = double(nhousehold)/double(activecount);
-	};
-
-	// regression
-	double bbeta[5];
-	double* X[4];
-	X[0] = K_sim.hptr;
-	X[1] = z_sim.hptr;
-	X[2] = ssigmax_sim.hptr;
-	X[3] = q_sim.hptr;
-
-	// run each regression and report
-	double Rsq_K = logOLS(K_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
-	r.pphi_KC = bbeta[0]; r.pphi_KK = bbeta[1]; r.pphi_Kz = bbeta[2]; r.pphi_Kssigmax = bbeta[3];
-	printf("Rsq_K = %f, log(Kplus) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z).\n",Rsq_K,r.pphi_KC,r.pphi_KK,r.pphi_Kssigmax,r.pphi_Kz);
-
-	double Rsq_q = logOLS(q_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
-	r.pphi_qC = bbeta[0]; r.pphi_qK = bbeta[1]; r.pphi_qz = bbeta[2]; r.pphi_qssigmax = bbeta[3];
-	printf("Rsq_q = %f, log(qplus) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z).\n",Rsq_q,r.pphi_qC,r.pphi_qK,r.pphi_qssigmax,r.pphi_qz);
-
-	double Rsq_C = logOLS(C_sim.hptr,X,SIMULPERIOD,3,bbeta);
-	r.pphi_CC = bbeta[0]; r.pphi_CK = bbeta[1]; r.pphi_Cz = bbeta[2]; r.pphi_Cssigmax = bbeta[3];
-	printf("Rsq_C = %f, log(C) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z).\n",Rsq_C,r.pphi_CC,r.pphi_CK,r.pphi_Cssigmax,r.pphi_Cz);
-
-	double Rsq_ttheta = logOLS(ttheta_sim.hptr,X,SIMULPERIOD,4,bbeta);
-	r.pphi_tthetaC = bbeta[0]; r.pphi_tthetaK = bbeta[1]; r.pphi_tthetaz = bbeta[2]; r.pphi_tthetassigmax = bbeta[3]; r.pphi_tthetaq = bbeta[4];
-	printf("Rsq_ttheta = %f, log(ttheta) = %f + %f * log(K) + %f * log(ssigmax)+%f * log(z) + %f*log(q).\n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetaK,r.pphi_tthetassigmax,r.pphi_tthetaz,r.pphi_tthetaq);
-
-	outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_ttheta));
 
 
-	// Stop Timer
-	cudaEventRecord(stop,NULL);
-	cudaEventSynchronize(stop);
-	float msecTotal = 0.0;
-	cudaEventElapsedTime(&msecTotal, start, stop);
+			std::cout << "diff is: "<< diff << std::endl;
+			std::cout << "consec is: "<< consec << std::endl;
 
-	// Compute and print the performance
-	float msecPerMatrixMul = msecTotal;
-	std::cout << "Time= " << msecPerMatrixMul/1000 << " secs, iter= " << iter << std::endl;
+			// update correspondence
+			d_V       = d_Vplus;
+			d_koptind = d_koptindplus;
+
+			std::cout << ++iter << std::endl;
+			std::cout << "=====================" << std::endl;
+		};
+		// VFI ends //
+
+		// simulation given policies
+		for (unsigned int t = 0; t < SIMULPERIOD; t++) {
+			// find aggregate K from distribution of k
+			K_sim[t] =  thrust::reduce(k_sim.dvec.begin()+t*nhousehold, k_sim.dvec.begin()+nhousehold+t*nhousehold, (double) 0, thrust::plus<double>())/double(nhousehold);
+
+			// find current wage from aggregate things
+			double C = exp( r.pphi_CC + r.pphi_CK*log(K_sim.hvec[t]) + r.pphi_Cssigmax*log(ssigmax_sim.hvec[t]) + r.pphi_Cz*log(z_sim.hvec[t]) );
+			double w = p.ppsi_n*C;
+			double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold);
+			int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold);
+			double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold);
+			int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold);
+
+			// given markup find optimal price for monopolist
+			double profitmax = -9999999;
+			int i_qmax = 0;
+			for (unsigned int i_markup = 0; i_markup < nmarkup; i_markup++) {
+				// find current variables
+				double q           = h_markup_grid[i_markup]*w;
+				int i_q            = fit2grid(q, nq, thrust::raw_pointer_cast(h_q_grid.data()));
+				double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(q) );
+				double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
+
+				// compute profit from each hh
+				thrust::for_each(
+					begin_hh,
+					end_hh,
+					profitfromhh(
+						d_kopt_ptr,
+						d_active_ptr,
+						d_k_grid_ptr,
+						q,
+						w,
+						mmu,
+						matchshock_ptr,
+						Kind_sim[t],
+						i_q,
+						zind_sim.hvec[t],
+						ssigmaxind_sim.hvec[t],
+						kindlist_ptr,
+						xindlist_ptr,
+						p,
+						profit_temp.dptr
+					)
+				);
+
+				// sum over profit to find total profit
+				double totprofit = thrust::reduce(profit_temp.dvec.begin(), profit_temp.dvec.end(), (double) 0, thrust::plus<double>());
+				if (totprofit > profitmax) {
+					profitmax = totprofit;
+					i_qmax    = i_q;
+				};
+			}
+			qind_sim[t] = i_qmax;
+			double qmax = h_q_grid[i_qmax];
+			q_sim[t] = qmax;
+
+			// evolution under qmax!
+			double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
+			double mmu_temp    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
+			thrust::for_each(
+				begin_hh,
+				end_hh,
+				simulateforward(
+					d_kopt_ptr,
+					d_koptind_ptr,
+					d_active_ptr,
+					d_k_grid_ptr,
+					d_z_grid_ptr,
+					d_x_grid_ptr,
+					qmax,
+					w,
+					mmu_temp,
+					matchshock_ptr,
+					Kind_sim[t],
+					i_qmax,
+					zind_sim.hvec[t],
+					ssigmaxind_sim.hvec[t],
+					kindlist_ptr,
+					klist_ptr,
+					xindlist_ptr,
+					clist.dptr,
+					activelist.dptr,
+					p
+				)
+			);
+
+			// find aggregate C and active ttheta
+			C_sim.hptr[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
+			int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
+			if (activecount != 0) {
+				ttheta_sim.hptr[t]   = double(nhousehold)/double(activecount);
+			} else {
+				ttheta_sim.hptr[t]   = 1234567789.0;
+			};
+		};
+		display_vec(ttheta_sim);
+
+		// regression
+		double bbeta[5];
+		double* X[4];
+		X[0] = K_sim.hptr;
+		X[1] = z_sim.hptr;
+		X[2] = ssigmax_sim.hptr;
+		X[3] = q_sim.hptr;
+
+		// run each regression and report
+		double Rsq_K = logOLS(K_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
+		r.pphi_KC = bbeta[0]; r.pphi_KK = bbeta[1]; r.pphi_Kz = bbeta[2]; r.pphi_Kssigmax = bbeta[3];
+		printf("Rsq_K = %.4f, log(Kplus) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_K,r.pphi_KC,r.pphi_KK,r.pphi_Kssigmax,r.pphi_Kz);
+
+		double Rsq_q = logOLS(q_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
+		r.pphi_qC = bbeta[0]; r.pphi_qK = bbeta[1]; r.pphi_qz = bbeta[2]; r.pphi_qssigmax = bbeta[3];
+		printf("Rsq_q = %.4f, log(qplus) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_q,r.pphi_qC,r.pphi_qK,r.pphi_qssigmax,r.pphi_qz);
+
+		double Rsq_C = logOLS(C_sim.hptr,X,SIMULPERIOD,3,bbeta);
+		r.pphi_CC = bbeta[0]; r.pphi_CK = bbeta[1]; r.pphi_Cz = bbeta[2]; r.pphi_Cssigmax = bbeta[3];
+		printf("Rsq_C = %.4f, log(C) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_C,r.pphi_CC,r.pphi_CK,r.pphi_Cssigmax,r.pphi_Cz);
+
+		double Rsq_ttheta = logOLS(ttheta_sim.hptr,X,SIMULPERIOD,4,bbeta);
+		r.pphi_tthetaC = bbeta[0]; r.pphi_tthetaK = bbeta[1]; r.pphi_tthetaz = bbeta[2]; r.pphi_tthetassigmax = bbeta[3]; r.pphi_tthetaq = bbeta[4];
+		printf("Rsq_ttheta = %.4f, log(ttheta) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z) + %.4f*log(q).\n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetaK,r.pphi_tthetassigmax,r.pphi_tthetaz,r.pphi_tthetaq);
+
+		outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_ttheta));
+
+
+		// Stop Timer
+		cudaEventRecord(stop,NULL);
+		cudaEventSynchronize(stop);
+		float msecTotal = 0.0;
+		cudaEventElapsedTime(&msecTotal, start, stop);
+
+		// Compute and print the performance
+		float msecPerMatrixMul = msecTotal;
+		std::cout << "Time= " << msecPerMatrixMul/1000 << " secs, iter= " << iter << std::endl;
+	}
 
 	// Copy back to host and print to file
 	h_V       = d_V;
@@ -968,12 +976,17 @@ int main(int argc, char ** argv)
 	h_active  = d_active;
 	h_profit  = d_profit;
 
-	save_vec(h_K_grid,"./results/K_grid.csv");   // in #include "cuda_helpers.h"
-	save_vec(h_k_grid,"./results/k_grid.csv");   // in #include "cuda_helpers.h"
-	save_vec(h_V,"./results/Vgrid.csv");         // in #include "cuda_helpers.h"
-	save_vec(h_active,"./results/active.csv");   // in #include "cuda_helpers.h"
-	save_vec(h_koptind,"./results/koptind.csv"); // in #include "cuda_helpers.h"
-	save_vec(h_kopt,"./results/kopt.csv");       // in #include "cuda_helpers.h"
+	r.savetofile("./results/aggrules.csv");
+	save_vec(h_K_grid,"./results/K_grid.csv");         // in #include "cuda_helpers.h"
+	save_vec(h_k_grid,"./results/k_grid.csv");         // in #include "cuda_helpers.h"
+	save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h"
+	save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
+	save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
+	save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h"
+	save_vec(K_sim,"./results/K_sim.csv");             // in #include "cuda_helpers.h"
+	save_vec(z_sim,"./results/z_sim.csv");             // in #include "cuda_helpers.h"
+	save_vec(ssigmax_sim,"./results/ssigmax_sim.csv"); // in #include "cuda_helpers.h"
+	save_vec(q_sim,"./results/ssigmax_sim.csv");       // in #include "cuda_helpers.h"
 	std::cout << "Policy functions output completed." << std::endl;
 
 	// Export parameters to MATLAB

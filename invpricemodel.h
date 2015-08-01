@@ -63,6 +63,62 @@ struct aggrules {
 	double pphi_qC,      pphi_qK,      pphi_qz,      pphi_qssigmax;
 	double pphi_CC,      pphi_CK,      pphi_Cz,      pphi_Cssigmax;
 	double pphi_tthetaC, pphi_tthetaK, pphi_tthetaz, pphi_tthetassigmax, pphi_tthetaq;
+
+	// savetofile function
+	__host__
+	void savetofile(std::string filename) {
+		std::cout << "================================================================================" << std::endl;
+		std::cout << "Saving to " << filename << std::endl;
+		std::ofstream fileout(filename.c_str(), std::ofstream::trunc);
+		fileout << std::setprecision(16) << pphi_KC << '\n';
+		fileout << std::setprecision(16) << pphi_KK << '\n';
+		fileout << std::setprecision(16) << pphi_Kz << '\n';
+		fileout << std::setprecision(16) << pphi_Kssigmax << '\n';
+		fileout << std::setprecision(16) << pphi_qC << '\n';
+		fileout << std::setprecision(16) << pphi_qK << '\n';
+		fileout << std::setprecision(16) << pphi_qz << '\n';
+		fileout << std::setprecision(16) << pphi_qssigmax << '\n';
+		fileout << std::setprecision(16) << pphi_CC << '\n';
+		fileout << std::setprecision(16) << pphi_CK << '\n';
+		fileout << std::setprecision(16) << pphi_Cz << '\n';
+		fileout << std::setprecision(16) << pphi_Cssigmax << '\n';
+		fileout << std::setprecision(16) << pphi_tthetaC << '\n';
+		fileout << std::setprecision(16) << pphi_tthetaK << '\n';
+		fileout << std::setprecision(16) << pphi_tthetaz << '\n';
+		fileout << std::setprecision(16) << pphi_tthetassigmax << '\n';
+		fileout << std::setprecision(16) << pphi_tthetaq << '\n';
+		fileout.close();
+		std::cout << "Done!" << std::endl;
+		std::cout << "================================================================================" << std::endl;
+	};
+
+	// load from function
+	__host__
+	void loadfromfile(std::string filename) {
+		std::cout << "================================================================================" << std::endl;
+		std::cout << "Loading to " << filename << std::endl;
+		std::ifstream filein(filename.c_str());
+		filein >> pphi_KC            ;
+		filein >> pphi_KK            ;
+		filein >> pphi_Kz            ;
+		filein >> pphi_Kssigmax      ;
+		filein >> pphi_qC            ;
+		filein >> pphi_qK            ;
+		filein >> pphi_qz            ;
+		filein >> pphi_qssigmax      ;
+		filein >> pphi_CC            ;
+		filein >> pphi_CK            ;
+		filein >> pphi_Cz            ;
+		filein >> pphi_Cssigmax      ;
+		filein >> pphi_tthetaC       ;
+		filein >> pphi_tthetaK       ;
+		filein >> pphi_tthetaz       ;
+		filein >> pphi_tthetassigmax ;
+		filein >> pphi_tthetaq       ;
+		filein.close();
+		std::cout << "Done!" << std::endl;
+		std::cout << "================================================================================" << std::endl;
+	};
 };
 
 #endif
