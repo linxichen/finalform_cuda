@@ -542,10 +542,10 @@ int main(int argc, char ** argv)
 	// Create capital grid
 	double maxK = 20.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
-	for (int i_k = 0; i_k < nk; i_k++) {
-		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
-	};
-	/* linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
+	/* for (int i_k = 0; i_k < nk; i_k++) { */
+	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
+	/* }; */
+	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h"
 	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
 	// Create shocks grids and transition matrix
@@ -590,8 +590,8 @@ int main(int argc, char ** argv)
 	cudavec<double> CDF_x_high(nx*nx,0);              pdf2cdf(h_PX_high_ptr,nx,CDF_x_high.hptr);         CDF_x_high.h2d();
 
 	// Create pricing grids
-	double minq = 0.4;
-	double maxq = 2.0;
+	double minq = 0.2;
+	double maxq = 6.0;
 	double minmarkup = 1.0;
 	double maxmarkup = 1.3;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
@@ -689,7 +689,7 @@ int main(int argc, char ** argv)
 	cudavec<double> ssigmax_sim(SIMULPERIOD,h_ssigmax_grid[(nssigmax-1)/2]);
 	for (int t = 1; t < SIMULPERIOD; t++) {
 		zind_sim.hptr[t]       = markovdiscrete(zind_sim.hptr[t-1],CDF_z.hptr,nz,innov_z.hptr[t]);
-		ssigmaxind_sim.hptr[t] = markovdiscrete(ssigmax_sim.hptr[t-1],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
+		ssigmaxind_sim.hptr[t] = markovdiscrete(ssigmaxind_sim.hptr[t-1],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
 		z_sim.hptr[t] = h_z_grid[zind_sim.hptr[t]];
 		ssigmax_sim.hptr[t] = h_ssigmax_grid[ssigmaxind_sim.hptr[t]];
 		for (int i_household = 0; i_household < nhousehold; i_household++) {
@@ -836,6 +836,7 @@ int main(int argc, char ** argv)
 		for (unsigned int t = 0; t < SIMULPERIOD; t++) {
 			// find aggregate K from distribution of k
 			K_sim[t] =  thrust::reduce(k_sim.dvec.begin()+t*nhousehold, k_sim.dvec.begin()+nhousehold+t*nhousehold, (double) 0, thrust::plus<double>())/double(nhousehold);
+			Kind_sim[t] = fit2grid(K_sim[t],nK,thrust::raw_pointer_cast(h_K_grid.data()));
 
 			// find current wage from aggregate things
 			double C = exp( r.pphi_CC + r.pphi_CK*log(K_sim.hvec[t]) + r.pphi_Cssigmax*log(ssigmax_sim.hvec[t]) + r.pphi_Cz*log(z_sim.hvec[t]) );
@@ -928,7 +929,6 @@ int main(int argc, char ** argv)
 				ttheta_sim.hptr[t]   = 1234567789.0;
 			};
 		};
-		display_vec(ttheta_sim);
 
 		// regression
 		double bbeta[5];
@@ -967,6 +967,14 @@ int main(int argc, char ** argv)
 		// Compute and print the performance
 		float msecPerMatrixMul = msecTotal;
 		std::cout << "Time= " << msecPerMatrixMul/1000 << " secs, iter= " << iter << std::endl;
+
+		// save simulations
+		save_vec(K_sim,"./results/K_sim.csv");             // in #include "cuda_helpers.h"
+		save_vec(z_sim,"./results/z_sim.csv");             // in #include "cuda_helpers.h"
+		save_vec(ssigmax_sim,"./results/ssigmax_sim.csv"); // in #include "cuda_helpers.h"
+		save_vec(q_sim,"./results/q_sim.csv");       // in #include "cuda_helpers.h"
+		save_vec(C_sim,"./results/C_sim.csv");       // in #include "cuda_helpers.h"
+		save_vec(ttheta_sim,"./results/ttheta_sim.csv");       // in #include "cuda_helpers.h"
 	}
 
 	// Copy back to host and print to file
@@ -983,10 +991,6 @@ int main(int argc, char ** argv)
 	save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
 	save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
 	save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h"
-	save_vec(K_sim,"./results/K_sim.csv");             // in #include "cuda_helpers.h"
-	save_vec(z_sim,"./results/z_sim.csv");             // in #include "cuda_helpers.h"
-	save_vec(ssigmax_sim,"./results/ssigmax_sim.csv"); // in #include "cuda_helpers.h"
-	save_vec(q_sim,"./results/ssigmax_sim.csv");       // in #include "cuda_helpers.h"
 	std::cout << "Policy functions output completed." << std::endl;
 
 	// Export parameters to MATLAB
