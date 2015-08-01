@@ -30,7 +30,7 @@ CXX       = g++
 CXXFLAGS  = -O2 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
 
 # Add CUDA libraries to C++ compiler linking process
-LDFLAGS  += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapacke -llapack -std=c++11 -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
+LDFLAGS  += -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapacke -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
 
 # List Executables and Objects
 EXEC = vfi
@@ -39,7 +39,7 @@ all : $(EXEC)
 
 # Link objects from CUDA and C++ codes
 EXEC : vfi.o vfi_link.o cppcode.o
-	$(CXX) -o $@ $^ $(LDFLAGS)
+	$(NVCC) -o $@ $^ $(LDFLAGS)
 
 # Prepare CUDA objects for linking
 vfi_link.o : vfi.o cppcode.o
