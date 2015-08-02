@@ -1,6 +1,6 @@
-#define nk 250
-#define nx 7
-#define nz 7
+#define nk 150
+#define nx 5
+#define nz 5
 #define nssigmax 2
 #define ns nx*nz*nssigmax
 #define nK 25
