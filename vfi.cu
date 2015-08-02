@@ -1,16 +1,16 @@
-#define nk 250
-#define nx 7
-#define nz 7
+#define nk 200
+#define nx 9
+#define nz 9
 #define nssigmax 2
 #define ns nx*nz*nssigmax
-#define nK 25
+#define nK 50
 #define nq 50
 #define nmarkup 50
-#define tauchenwidth 2.5
+#define tauchenwidth 3.0
 #define tol 1e-4
 #define outertol 1e-4
 #define damp 0.5
-#define maxconsec 15
+#define maxconsec 50
 #define maxiter 2000
 #define SIMULPERIOD 1000
 #define nhousehold 10000
@@ -295,7 +295,7 @@ struct updateWV
 		// Find W and V finally
 		Vplus[index] = rhsmax;
 			koptindplus[index] = koptind_active;
-		if (k_grid[koptind_active] != (1-p.ddelta)*k) {
+		if (k_grid[koptind_active] > (1-p.ddelta)*k) {
 			active[index]      = 1;
 			kopt[index]        = k_grid[koptind_active];
 		} else {
@@ -540,12 +540,12 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 20.0;
+	double maxK = 70.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
-	/* for (int i_k = 0; i_k < nk; i_k++) { */
-	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
-	/* }; */
-	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h"
+	for (int i_k = 0; i_k < nk; i_k++) {
+		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
+	};
+	/* linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
 	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
 	// Create shocks grids and transition matrix
@@ -591,7 +591,7 @@ int main(int argc, char ** argv)
 
 	// Create pricing grids
 	double minq = 0.2;
-	double maxq = 6.0;
+	double maxq = 5.0;
 	double minmarkup = 1.0;
 	double maxmarkup = 1.3;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
@@ -704,6 +704,10 @@ int main(int argc, char ** argv)
 	zind_sim.h2d();
 	ssigmaxind_sim.h2d();
 	xind_sim.h2d();
+	display_vec(zind_sim);
+	display_vec(z_sim);
+	display_vec(CDF_z);
+	display_vec(CDF_ssigmax);
 
 	// Prepare for cuBLAS things
 	cublasHandle_t handle;
@@ -938,6 +942,14 @@ int main(int argc, char ** argv)
 		X[2] = ssigmax_sim.hptr;
 		X[3] = q_sim.hptr;
 
+		// save simulations
+		save_vec(K_sim,"./results/K_sim.csv");             // in #include "cuda_helpers.h"
+		save_vec(z_sim,"./results/z_sim.csv");             // in #include "cuda_helpers.h"
+		save_vec(ssigmax_sim,"./results/ssigmax_sim.csv"); // in #include "cuda_helpers.h"
+		save_vec(q_sim,"./results/q_sim.csv");       // in #include "cuda_helpers.h"
+		save_vec(C_sim,"./results/C_sim.csv");       // in #include "cuda_helpers.h"
+		save_vec(ttheta_sim,"./results/ttheta_sim.csv");       // in #include "cuda_helpers.h"
+
 		// run each regression and report
 		double Rsq_K = logOLS(K_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
 		r.pphi_KC = bbeta[0]; r.pphi_KK = bbeta[1]; r.pphi_Kz = bbeta[2]; r.pphi_Kssigmax = bbeta[3];
@@ -968,30 +980,23 @@ int main(int argc, char ** argv)
 		float msecPerMatrixMul = msecTotal;
 		std::cout << "Time= " << msecPerMatrixMul/1000 << " secs, iter= " << iter << std::endl;
 
-		// save simulations
-		save_vec(K_sim,"./results/K_sim.csv");             // in #include "cuda_helpers.h"
-		save_vec(z_sim,"./results/z_sim.csv");             // in #include "cuda_helpers.h"
-		save_vec(ssigmax_sim,"./results/ssigmax_sim.csv"); // in #include "cuda_helpers.h"
-		save_vec(q_sim,"./results/q_sim.csv");       // in #include "cuda_helpers.h"
-		save_vec(C_sim,"./results/C_sim.csv");       // in #include "cuda_helpers.h"
-		save_vec(ttheta_sim,"./results/ttheta_sim.csv");       // in #include "cuda_helpers.h"
+		// Copy back to host and print to file
+		h_V       = d_V;
+		h_koptind = d_koptind;
+		h_kopt = d_kopt;
+		h_active  = d_active;
+		h_profit  = d_profit;
+
+		r.savetofile("./results/aggrules.csv");
+		save_vec(h_K_grid,"./results/K_grid.csv");         // in #include "cuda_helpers.h"
+		save_vec(h_k_grid,"./results/k_grid.csv");         // in #include "cuda_helpers.h"
+		save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h"
+		save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
+		save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
+		save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h"
+		std::cout << "Policy functions output completed." << std::endl;
 	}
 
-	// Copy back to host and print to file
-	h_V       = d_V;
-	h_koptind = d_koptind;
-	h_kopt = d_kopt;
-	h_active  = d_active;
-	h_profit  = d_profit;
-
-	r.savetofile("./results/aggrules.csv");
-	save_vec(h_K_grid,"./results/K_grid.csv");         // in #include "cuda_helpers.h"
-	save_vec(h_k_grid,"./results/k_grid.csv");         // in #include "cuda_helpers.h"
-	save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h"
-	save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
-	save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
-	save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h"
-	std::cout << "Policy functions output completed." << std::endl;
 
 	// Export parameters to MATLAB
 	p.exportmatlab("./MATLAB/vfi_para.m");
