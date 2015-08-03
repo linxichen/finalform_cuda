@@ -11,7 +11,6 @@ ICUDA_MAC = /Developer/NVIDIA/CUDA-7.0/include
 LCUDA_MAC = /Developer/NVIDIA/CUDA-7.0/lib
 ICPP_MAC = /usr/local/include
 LCPP_MAC = /usr/local/lib
-ILAPACK = /usr/include/lapacke
 
 SDIR = .
 IDIR = .
@@ -30,7 +29,7 @@ CXX = g++
 CXXFLAGS = -O2 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
 
 # Add CUDA libraries to C++ compiler linking process
-LDFLAGS += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapacke -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
+LDFLAGS += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapack -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
 
 # List Executables and Objects
 EXEC = vfi
@@ -43,15 +42,15 @@ $(EXEC) : vfi.o vfi_dlink.o cppcode.o
 
 # Dlink CUDA relocatable object into executable object
 vfi_dlink.o : vfi.o
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -dlink $^ -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDFLAGS) -dlink $^ -o $@
 
 # Compile CUDA code
 vfi.o : vfi.cu
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) -dc $^ -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDFLAGS) -dc $^ -o $@
 
 # Compile C++ code
 cppcode.o : cppcode.cpp
-	$(CXX) $(CXXFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $^ -o $@
 
 clean :
 	rm -f *.o

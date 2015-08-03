@@ -3,7 +3,6 @@
 #include <iostream>
 #include <thrust/host_vector.h>
 #include <armadillo>
-#include <lapacke.h>
 #include "cppcode.h"
 
 using namespace arma;
