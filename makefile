@@ -29,28 +29,28 @@ CXX = g++
 CXXFLAGS = -O2 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
 
 # Add CUDA libraries to C++ compiler linking process
-LDFLAGS += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapack -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
+LDLIBS += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapack -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
 
 # List Executables and Objects
 EXEC = vfi
 
-all : $(EXEC)
+all : veryclean $(EXEC) runvfi
 
 # Link objects from CUDA and C++ codes
 $(EXEC) : vfi.o vfi_dlink.o cppcode.o
-	$(NVCC) $^ $(LDFLAGS) -o $@
+	$(NVCC) $^ $(LDLIBS) -o $@
 
 # Dlink CUDA relocatable object into executable object
 vfi_dlink.o : vfi.o
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDFLAGS) -dlink $^ -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDLIBS) -dlink $^ -o $@
 
 # Compile CUDA code
 vfi.o : vfi.cu
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDFLAGS) -dc $^ -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDLIBS) -dc $^ -o $@
 
 # Compile C++ code
 cppcode.o : cppcode.cpp
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -c $^ -o $@
+	$(CXX) $(CXXFLAGS) $(LDLIBS) -c $^ -o $@
 
 clean :
 	rm -f *.o
