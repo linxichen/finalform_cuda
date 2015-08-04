@@ -1,8 +1,6 @@
 #ifndef MODEL
 #define MODEL
 
-#include "common.h"
-
 // Define an class that contains parameters and steady states
 struct para {
 	// Model parameters

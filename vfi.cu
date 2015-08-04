@@ -38,9 +38,7 @@
 #include <curand.h>
 
 // Includes, my own creation
-#include "common.h"
-#include "cuda_helpers.h"
-#include "cppcode.h"
+#include "cudatools/include/cudatools.hpp"
 
 // Includes model stuff
 #include "invpricemodel.h"

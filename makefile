@@ -13,44 +13,40 @@ ICPP_MAC = /usr/local/include
 LCPP_MAC = /usr/local/lib
 
 SDIR = .
-IDIR = .
-LDIR = .
+IDIR = ./cudatools/include
+LDIR = ./cudatools/lib
 
 # Compiler for CUDA
 NVCC = nvcc
 
 # CUDA compiling options
-NVCCFLAGS = -arch sm_30 #-use_fast_math
+NVCCFLAGS = -v -arch sm_30 #-use_fast_math
 
 # Compiler for C code
 CXX = g++
 
 # Standard optimization flags to C++ compiler
-CXXFLAGS = -O2 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(ILAPACK)
+CXXFLAGS = -O2 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(IDIR)
 
 # Add CUDA libraries to C++ compiler linking process
-LDLIBS += -lstdc++ -lcublas -lcurand -lcudart -larmadillo -lopenblas -llapack -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC)
+LDLIBS += -lstdc++ -lcublas -lcurand -lcudart -lcudadevrt -larmadillo -lopenblas -llapack -larmadillo -lcudatools -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC) -L$(LDIR)
 
 # List Executables and Objects
 EXEC = vfi
 
-all : veryclean $(EXEC) runvfi
+all : $(EXEC) runvfi
 
 # Link objects from CUDA and C++ codes
-$(EXEC) : vfi.o vfi_dlink.o cppcode.o
-	$(NVCC) $^ $(LDLIBS) -o $@
+$(EXEC) : vfi_dlink.o vfi.o $(LDIR)/libcudatools.a
+	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDLIBS)
 
-# Dlink CUDA relocatable object into executable object
+#Prepare for host linker
 vfi_dlink.o : vfi.o
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDLIBS) -dlink $^ -o $@
+	$(NVCC) -dlink  $^ -o $@ $(NVCCFLAGS) $(LDLIBS)
 
 # Compile CUDA code
 vfi.o : vfi.cu
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS) $(LDLIBS) -dc $^ -o $@
-
-# Compile C++ code
-cppcode.o : cppcode.cpp
-	$(CXX) $(CXXFLAGS) $(LDLIBS) -c $^ -o $@
+	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS)  -dc $^ -o $@ $(LDLIBS)
 
 clean :
 	rm -f *.o
