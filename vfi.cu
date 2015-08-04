@@ -506,7 +506,7 @@ int main(int argc, char ** argv)
 	p.ppsi_n       = 1;
 	p.aalpha0      = 0.95;
 	p.aalpha1      = 0.01;
-	p.eeta         = 0.0;
+	p.eeta         = 0.1;
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
 
@@ -538,7 +538,7 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 70.0;
+	double maxK = 100.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
@@ -589,9 +589,9 @@ int main(int argc, char ** argv)
 
 	// Create pricing grids
 	double minq = 0.2;
-	double maxq = 5.0;
+	double maxq = 15.0;
 	double minmarkup = 1.0;
-	double maxmarkup = 1.3;
+	double maxmarkup = 2.0;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
 
