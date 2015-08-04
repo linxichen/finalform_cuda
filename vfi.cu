@@ -10,7 +10,7 @@
 #define tol 1e-4
 #define outertol 1e-4
 #define damp 0.5
-#define maxconsec 50
+#define maxconsec 20
 #define maxiter 2000
 #define SIMULPERIOD 1000
 #define nhousehold 10000
@@ -374,6 +374,56 @@ struct profitfromhh {
 };
 
 // finds profit generated from each household i at time t
+struct outputfromhh {
+	// data members
+	double* k_grid;
+	double* x_grid;
+	double* z_grid;
+	double  w;
+	int     zind;
+	int*    kind_sim;
+	int*    xind_sim;
+	para    p;
+	double* outputlist;
+
+	// constructor
+	__host__ __device__
+	outputfromhh(
+		double* k_grid_ptr,
+		double* x_grid_ptr,
+		double* z_grid_ptr,
+		double  _w,
+		int     _zind,
+		int*    kind_sim_ptr,
+		int*    xind_sim_ptr,
+		para    _p,
+		double* outputlist_ptr
+	) {
+		k_grid     = k_grid_ptr;
+		x_grid     = x_grid_ptr;
+		z_grid     = z_grid_ptr;
+		w          = _w;
+		zind       = _zind;
+		kind_sim   = kind_sim_ptr;
+		xind_sim   = xind_sim_ptr;
+		p          = _p;
+		outputlist = outputlist_ptr;
+	}
+
+	// operator to find profit from each household
+	__host__ __device__
+	void operator() (int index) {
+		int kind = kind_sim[index];
+		double k = k_grid[kind];
+		int xind = xind_sim[index];
+		double x = x_grid[xind];
+		double z = z_grid[zind];
+		double l = pow( w/z/x/p.v/pow(k,p.aalpha), 1.0/(p.v-1) );
+		outputlist[index] = z*x*pow(k,p.aalpha)*pow(l,p.v)/nhousehold;
+	};
+};
+
+// finds profit generated from each household i at time t
 struct simulateforward {
 	// data members
 	double* kopt;
@@ -393,7 +443,6 @@ struct simulateforward {
 	int*    kind_sim;
 	double* k_sim;
 	int*    xind_sim;
-	double* outputlist;
 	int*    activelist;
 	para    p;
 
@@ -417,7 +466,6 @@ struct simulateforward {
 		int*    kind_sim_ptr,
 		double* k_sim_ptr,
 		int*    xind_sim_ptr,
-		double* outputlist_ptr,
 		int*    activelist_ptr,
 		para    _p
 	) {
@@ -438,7 +486,6 @@ struct simulateforward {
 		kind_sim   = kind_sim_ptr;
 		k_sim      = k_sim_ptr;
 		xind_sim   = xind_sim_ptr;
-		outputlist      = outputlist_ptr;
 		activelist = activelist_ptr;
 		p          = _p;
 	}
@@ -459,10 +506,6 @@ struct simulateforward {
 			kind_sim[index+nhousehold] = noinvest_ind;
 			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
 		};
-		double z = z_grid[zind];
-		double x = x_grid[xind];
-		double l = pow( w/z/x/p.v/pow(k,p.aalpha), 1.0/(p.v-1) );
-		outputlist[index] = z*x*pow(k,p.aalpha)*pow(l,p.v);
 		activelist[index] = active[i_state];
 	};
 };
@@ -538,7 +581,7 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 30.0;
+	double maxK = 100.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
@@ -589,7 +632,7 @@ int main(int argc, char ** argv)
 
 	// Create pricing grids
 	double minq = 0.2;
-	double maxq = 5.0;
+	double maxq = 15.0;
 	double minmarkup = 1.0;
 	double maxmarkup = 1.3;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
@@ -597,7 +640,7 @@ int main(int argc, char ** argv)
 
 	// set initial agg rules
 	aggrules r;
-	r.pphi_qC = log((maxq+minq)/2.0); // constant term
+	r.pphi_qC = log((maxq)); // constant term
 	r.pphi_qK = 0; // w.r.t agg K
 	r.pphi_qz = 0; // w.r.t agg TFP
 	r.pphi_qssigmax = 0; // w.r.t uncertainty
@@ -605,7 +648,7 @@ int main(int argc, char ** argv)
 	r.pphi_KC = log((maxK+minK)/2.0);
 	r.pphi_Kz = 0;
 	r.pphi_Kssigmax = 0;// Aggregate Law of motion for aggregate capital
-	r.pphi_CC = log((maxq+minq)/(maxmarkup+minmarkup)/p.ppsi_n);
+	r.pphi_CC = log(2);
 	r.pphi_CK = 0.0;
 	r.pphi_Cz = 0.0;
 	r.pphi_Cssigmax = 0.0;
@@ -846,13 +889,31 @@ int main(int argc, char ** argv)
 			double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold);
 			int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold);
 
+			// compute profit from each hh
+			thrust::for_each(
+				begin_hh,
+				end_hh,
+				outputfromhh(
+					d_k_grid_ptr,
+					d_x_grid_ptr,
+					d_z_grid_ptr,
+					w,
+					zind_sim.hvec[t],
+					kindlist_ptr,
+					xindlist_ptr,
+					p,
+					outputlist.dptr
+				)
+			);
+			double output = thrust::reduce(outputlist.dvec.begin(), outputlist.dvec.end(), (double) 0, thrust::plus<double>());
+
 			// given markup find optimal price for monopolist
 			double profitmax = -9999999;
 			int i_qmax = 0;
-			for (unsigned int i_markup = 0; i_markup < nmarkup; i_markup++) {
+			double inv = 0;
+			for (unsigned int i_q = 0; i_q < nq; i_q++) {
 				// find current variables
-				double q           = h_markup_grid[i_markup]*w;
-				int i_q            = fit2grid(q, nq, thrust::raw_pointer_cast(h_q_grid.data()));
+				double q           = h_q_grid[i_q];
 				double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(q) );
 				double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
 
@@ -881,7 +942,8 @@ int main(int argc, char ** argv)
 
 				// sum over profit to find total profit
 				double totprofit = thrust::reduce(profit_temp.dvec.begin(), profit_temp.dvec.end(), (double) 0, thrust::plus<double>());
-				if (totprofit > profitmax) {
+				double inv = totprofit/(q-p.MC);  ///< note that profit is already adjusted with 1/nhousehold
+				if (totprofit > profitmax && inv < output) {
 					profitmax = totprofit;
 					i_qmax    = i_q;
 				};
@@ -889,7 +951,6 @@ int main(int argc, char ** argv)
 			qind_sim[t] = i_qmax;
 			double qmax = h_q_grid[i_qmax];
 			q_sim[t] = qmax;
-			double inv = profitmax/(qmax-p.MC);  ///< note that profit is already adjusted with 1/nhousehold
 
 			// evolution under qmax!
 			double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
@@ -915,14 +976,14 @@ int main(int argc, char ** argv)
 					kindlist_ptr,
 					klist_ptr,
 					xindlist_ptr,
-					outputlist.dptr,
 					activelist.dptr,
 					p
 				)
 			);
 
 			// find aggregate C and active ttheta
-			C_sim.hptr[t]        = thrust::reduce(outputlist.dvec.begin(), outputlist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold) - inv;
+			double C_temp = thrust::reduce(outputlist.dvec.begin(), outputlist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold) - inv;
+			C_sim.hptr[t]        = (C_temp > 0.0) ? C_temp : 1e-15;
 			int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
 			if (activecount != 0) {
 				ttheta_sim.hptr[t]   = double(nhousehold)/double(activecount);
