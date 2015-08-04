@@ -366,7 +366,7 @@ struct profitfromhh {
 		int i_s  = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
 		if (matchshock[index] < mmu) {
-			profit_temp[index] = (q-w)*active[i_state]*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
+			profit_temp[index] = (q-p.MC)*active[i_state]*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
 		} else {
 			profit_temp[index] = 0;
 		};
@@ -393,7 +393,7 @@ struct simulateforward {
 	int*    kind_sim;
 	double* k_sim;
 	int*    xind_sim;
-	double* clist;
+	double* outputlist;
 	int*    activelist;
 	para    p;
 
@@ -417,7 +417,7 @@ struct simulateforward {
 		int*    kind_sim_ptr,
 		double* k_sim_ptr,
 		int*    xind_sim_ptr,
-		double* clist_ptr,
+		double* outputlist_ptr,
 		int*    activelist_ptr,
 		para    _p
 	) {
@@ -438,7 +438,7 @@ struct simulateforward {
 		kind_sim   = kind_sim_ptr;
 		k_sim      = k_sim_ptr;
 		xind_sim   = xind_sim_ptr;
-		clist      = clist_ptr;
+		outputlist      = outputlist_ptr;
 		activelist = activelist_ptr;
 		p          = _p;
 	}
@@ -462,7 +462,7 @@ struct simulateforward {
 		double z = z_grid[zind];
 		double x = x_grid[xind];
 		double l = pow( w/z/x/p.v/pow(k,p.aalpha), 1.0/(p.v-1) );
-		clist[index] = z*x*pow(k,p.aalpha)*pow(l,p.v);
+		outputlist[index] = z*x*pow(k,p.aalpha)*pow(l,p.v);
 		activelist[index] = active[i_state];
 	};
 };
@@ -538,7 +538,7 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 70.0;
+	double maxK = 30.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
@@ -702,8 +702,6 @@ int main(int argc, char ** argv)
 	zind_sim.h2d();
 	ssigmaxind_sim.h2d();
 	xind_sim.h2d();
-	display_vec(zind_sim);
-	display_vec(z_sim);
 	display_vec(CDF_z);
 	display_vec(CDF_ssigmax);
 
@@ -719,7 +717,7 @@ int main(int argc, char ** argv)
 	cudavec<double> k_sim(nhousehold*SIMULPERIOD,h_k_grid[(nk-1)/2]);
 	cudavec<int>    kind_sim(nhousehold*SIMULPERIOD,(nk-1)/2);
 	cudavec<double> profit_temp(nhousehold,0.0);
-	cudavec<double> clist(nhousehold,0.0);
+	cudavec<double> outputlist(nhousehold,0.0);
 	cudavec<int>    activelist(nhousehold,0.0);
 	cudavec<int>    qind_sim(SIMULPERIOD,(nq-1)/2);
 	cudavec<double> q_sim(SIMULPERIOD,h_q_grid[(nq-1)/2]);
@@ -891,6 +889,7 @@ int main(int argc, char ** argv)
 			qind_sim[t] = i_qmax;
 			double qmax = h_q_grid[i_qmax];
 			q_sim[t] = qmax;
+			double inv = profitmax/(qmax-p.MC);  ///< note that profit is already adjusted with 1/nhousehold
 
 			// evolution under qmax!
 			double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
@@ -916,14 +915,14 @@ int main(int argc, char ** argv)
 					kindlist_ptr,
 					klist_ptr,
 					xindlist_ptr,
-					clist.dptr,
+					outputlist.dptr,
 					activelist.dptr,
 					p
 				)
 			);
 
 			// find aggregate C and active ttheta
-			C_sim.hptr[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
+			C_sim.hptr[t]        = thrust::reduce(outputlist.dvec.begin(), outputlist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold) - inv;
 			int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
 			if (activecount != 0) {
 				ttheta_sim.hptr[t]   = double(nhousehold)/double(activecount);

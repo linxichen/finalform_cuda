@@ -20,7 +20,7 @@ LDIR = ./cudatools/lib
 NVCC = nvcc
 
 # CUDA compiling options
-NVCCFLAGS = -v -arch sm_30 #-use_fast_math
+NVCCFLAGS = -arch sm_30 #-use_fast_math
 
 # Compiler for C code
 CXX = g++
