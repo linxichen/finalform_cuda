@@ -1,20 +1,20 @@
-#define nk 200
-#define nx 9
-#define nz 9
-#define nssigmax 2
-#define ns nx*nz*nssigmax
-#define nK 50
-#define nq 50
-#define nmarkup 50
+#define nk           200
+#define nx           9
+#define nz           9
+#define nssigmax     2
+#define ns           nx*nz*nssigmax
+#define nK           50
+#define nq           50
+#define nmarkup      50
 #define tauchenwidth 3.0
-#define tol 1e-4
-#define outertol 1e-4
-#define damp 0.5
-#define maxconsec 50
-#define maxiter 2000
-#define SIMULPERIOD 1000
-#define nhousehold 10000
-#define kwidth 1.5
+#define tol          1e-4
+#define outertol     1e-4
+#define damp         0.5
+#define maxconsec    50
+#define maxiter      2000
+#define SIMULPERIOD  1000
+#define nhousehold   10000
+#define kwidth       1.5
 
 /* Includes, system */
 #include <fstream>
@@ -366,7 +366,7 @@ struct profitfromhh {
 		int i_s  = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
 		if (matchshock[index] < mmu) {
-			profit_temp[index] = (q-w)*active[i_state]*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
+			profit_temp[index] = (q-w)*double(active[i_state])*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
 		} else {
 			profit_temp[index] = 0;
 		};
@@ -451,13 +451,13 @@ struct simulateforward {
 		int xind    = xind_sim[index];
 		int i_s     = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
-		if (matchshock[index] < mmu) {
-			kind_sim[index+nhousehold] = active[i_state]*koptind[i_state];
+		if (matchshock[index] < mmu && active[i_state] == 1) {
+			kind_sim[index+nhousehold] = koptind[i_state];
 			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
 		} else {
 			int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
 			kind_sim[index+nhousehold] = noinvest_ind;
-			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
+			k_sim[index+nhousehold] = (1-p.ddelta)*k;
 		};
 		double z = z_grid[zind];
 		double x = x_grid[xind];
@@ -538,7 +538,7 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 100.0;
+	double maxK = 200.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
