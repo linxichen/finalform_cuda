@@ -10,7 +10,7 @@
 #define tol          1e-4
 #define outertol     1e-4
 #define damp         0.5
-#define maxconsec    50
+#define maxconsec    20
 #define maxiter      2000
 #define SIMULPERIOD  1000
 #define nhousehold   10000
@@ -589,9 +589,9 @@ int main(int argc, char ** argv)
 
 	// Create pricing grids
 	double minq = 0.2;
-	double maxq = 15.0;
+	double maxq = 7.0;
 	double minmarkup = 1.0;
-	double maxmarkup = 2.0;
+	double maxmarkup = 1.6;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
 
@@ -950,20 +950,33 @@ int main(int argc, char ** argv)
 
 		// run each regression and report
 		double Rsq_K = logOLS(K_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
-		r.pphi_KC = bbeta[0]; r.pphi_KK = bbeta[1]; r.pphi_Kz = bbeta[2]; r.pphi_Kssigmax = bbeta[3];
+		r.pphi_KC       = (1-damp)*r.pphi_KC       + damp*bbeta[0];
+		r.pphi_KK       = (1-damp)*r.pphi_KK       + damp*bbeta[1];
+		r.pphi_Kz       = (1-damp)*r.pphi_Kz       + damp*bbeta[2];
+		r.pphi_Kssigmax = (1-damp)*r.pphi_Kssigmax + damp*bbeta[3];
 		printf("Rsq_K = %.4f, log(Kplus) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_K,r.pphi_KC,r.pphi_KK,r.pphi_Kssigmax,r.pphi_Kz);
 
 		double Rsq_q = logOLS(q_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
-		r.pphi_qC = bbeta[0]; r.pphi_qK = bbeta[1]; r.pphi_qz = bbeta[2]; r.pphi_qssigmax = bbeta[3];
+		r.pphi_qC       = (1-damp)*r.pphi_qC       + damp*bbeta[0];
+		r.pphi_qK       = (1-damp)*r.pphi_qK       + damp*bbeta[1];
+		r.pphi_qz       = (1-damp)*r.pphi_qz       + damp*bbeta[2];
+		r.pphi_qssigmax = (1-damp)*r.pphi_qssigmax + damp*bbeta[3];
 		printf("Rsq_q = %.4f, log(qplus) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_q,r.pphi_qC,r.pphi_qK,r.pphi_qssigmax,r.pphi_qz);
 
 		double Rsq_C = logOLS(C_sim.hptr,X,SIMULPERIOD,3,bbeta);
-		r.pphi_CC = bbeta[0]; r.pphi_CK = bbeta[1]; r.pphi_Cz = bbeta[2]; r.pphi_Cssigmax = bbeta[3];
+		r.pphi_CC       = (1-damp)*r.pphi_CC       + damp*bbeta[0];
+		r.pphi_CK       = (1-damp)*r.pphi_CK       + damp*bbeta[1];
+		r.pphi_Cz       = (1-damp)*r.pphi_Cz       + damp*bbeta[2];
+		r.pphi_Cssigmax = (1-damp)*r.pphi_Cssigmax + damp*bbeta[3];
 		printf("Rsq_C = %.4f, log(C) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_C,r.pphi_CC,r.pphi_CK,r.pphi_Cssigmax,r.pphi_Cz);
 
 		double Rsq_ttheta = logOLS(ttheta_sim.hptr,X,SIMULPERIOD,4,bbeta);
-		r.pphi_tthetaC = bbeta[0]; r.pphi_tthetaK = bbeta[1]; r.pphi_tthetaz = bbeta[2]; r.pphi_tthetassigmax = bbeta[3]; r.pphi_tthetaq = bbeta[4];
-		printf("Rsq_ttheta = %.4f, log(ttheta) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z) + %.4f*log(q).\n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetaK,r.pphi_tthetassigmax,r.pphi_tthetaz,r.pphi_tthetaq);
+		r.pphi_tthetaC       = (1-damp)*r.pphi_tthetaC       + damp*bbeta[0];
+		r.pphi_tthetaK       = (1-damp)*r.pphi_tthetaK       + damp*bbeta[1];
+		r.pphi_tthetaz       = (1-damp)*r.pphi_tthetaz       + damp*bbeta[2];
+		r.pphi_tthetassigmax = (1-damp)*r.pphi_tthetassigmax + damp*bbeta[3];
+		r.pphi_tthetaq       = (1-damp)*r.pphi_tthetaq       + damp*bbeta[4];
+		printf("Rsq_ttheta = %.4f, log(ttheta) tthetathetatheta %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z) + %.4f*log(q).\n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetaK,r.pphi_tthetassigmax,r.pphi_tthetaz,r.pphi_tthetaq);
 
 		outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_ttheta));
 
