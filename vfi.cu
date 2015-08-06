@@ -588,8 +588,8 @@ int main(int argc, char ** argv)
 	cudavec<double> CDF_x_high(nx*nx,0);              pdf2cdf(h_PX_high_ptr,nx,CDF_x_high.hptr);         CDF_x_high.h2d();
 
 	// Create pricing grids
-	double minq = 0.2;
-	double maxq = 7.0;
+	double minq = 0.8;
+	double maxq = 3.0;
 	double minmarkup = 1.0;
 	double maxmarkup = 1.6;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
