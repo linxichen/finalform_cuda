@@ -498,7 +498,7 @@ int main(int argc, char ** argv)
 	p.pphi         = 0.000000;
 	p.MC           = 1;
 	p.rrhox        = 0.95;
-	p.ppsi         = 0.00;
+	p.ppsi         = -100000000000.00;
 	p.rrhoz        = p.rrhox;
 	p.ssigmaz      = 0.01;
 	p.ssigmax_low  = 0.04;
