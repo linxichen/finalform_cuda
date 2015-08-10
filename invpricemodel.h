@@ -84,15 +84,15 @@ struct aggrules {
 	double pphi_CzindK;
 	double pphi_CssigmaxindzindK;
 
-	double pphi_tthetaC;
-	double pphi_tthetazind;
-	double pphi_tthetassigmaxind;
-	double pphi_tthetassigmaxindzind;
-	double pphi_tthetaK;
-	double pphi_tthetassigmaxindK;
-	double pphi_tthetazindK;
-	double pphi_tthetassigmaxindzindK;
-	double pphi_tthetaq;
+	double pphi_mmuC;
+	double pphi_mmuzind;
+	double pphi_mmussigmaxind;
+	double pphi_mmussigmaxindzind;
+	double pphi_mmuK;
+	double pphi_mmussigmaxindK;
+	double pphi_mmuzindK;
+	double pphi_mmussigmaxindzindK;
+	double pphi_mmuq;
 
 	// savetofile function
 	__host__
@@ -127,15 +127,15 @@ struct aggrules {
 		fileout << std::setprecision(16) << pphi_CzindK << '\n';
 		fileout << std::setprecision(16) << pphi_CssigmaxindzindK << '\n';
 
-		fileout << std::setprecision(16) << pphi_tthetaC << '\n';
-		fileout << std::setprecision(16) << pphi_tthetazind << '\n';
-		fileout << std::setprecision(16) << pphi_tthetassigmaxind << '\n';
-		fileout << std::setprecision(16) << pphi_tthetassigmaxindzind << '\n';
-		fileout << std::setprecision(16) << pphi_tthetaK << '\n';
-		fileout << std::setprecision(16) << pphi_tthetassigmaxindK << '\n';
-		fileout << std::setprecision(16) << pphi_tthetazindK << '\n';
-		fileout << std::setprecision(16) << pphi_tthetassigmaxindzindK << '\n';
-		fileout << std::setprecision(16) << pphi_tthetaq << '\n';
+		fileout << std::setprecision(16) << pphi_mmuC << '\n';
+		fileout << std::setprecision(16) << pphi_mmuzind << '\n';
+		fileout << std::setprecision(16) << pphi_mmussigmaxind << '\n';
+		fileout << std::setprecision(16) << pphi_mmussigmaxindzind << '\n';
+		fileout << std::setprecision(16) << pphi_mmuK << '\n';
+		fileout << std::setprecision(16) << pphi_mmussigmaxindK << '\n';
+		fileout << std::setprecision(16) << pphi_mmuzindK << '\n';
+		fileout << std::setprecision(16) << pphi_mmussigmaxindzindK << '\n';
+		fileout << std::setprecision(16) << pphi_mmuq << '\n';
 		fileout.close();
 		std::cout << "Done!" << std::endl;
 		std::cout << "================================================================================" << std::endl;
@@ -174,15 +174,15 @@ struct aggrules {
 		filein >> pphi_CzindK                ;
 		filein >> pphi_CssigmaxindzindK      ;
 
-		filein >> pphi_tthetaC               ;
-		filein >> pphi_tthetazind            ;
-		filein >> pphi_tthetassigmaxind      ;
-		filein >> pphi_tthetassigmaxindzind  ;
-		filein >> pphi_tthetaK               ;
-		filein >> pphi_tthetassigmaxindK     ;
-		filein >> pphi_tthetazindK           ;
-		filein >> pphi_tthetassigmaxindzindK ;
-		filein >> pphi_tthetaq               ;
+		filein >> pphi_mmuC               ;
+		filein >> pphi_mmuzind            ;
+		filein >> pphi_mmussigmaxind      ;
+		filein >> pphi_mmussigmaxindzind  ;
+		filein >> pphi_mmuK               ;
+		filein >> pphi_mmussigmaxindK     ;
+		filein >> pphi_mmuzindK           ;
+		filein >> pphi_mmussigmaxindzindK ;
+		filein >> pphi_mmuq               ;
 
 		filein.close();
 		std::cout << "Done!" << std::endl;
