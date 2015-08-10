@@ -276,7 +276,7 @@ struct updateWV
 		int koptind_active = 0;
 		for (int i_kplus = 0; i_kplus < nk; i_kplus++) {
 			double convexadj = p.eeta*(k_grid[i_kplus]-(1-p.ddelta)*k)*(k_grid[i_kplus]-(1-p.ddelta)*k)/k;
-			double effective_price = (k_grid[i_kplus]>(1-p.ddelta)*k) ? q : p.pphi*q;
+			double effective_price = (k_grid[i_kplus]>=(1-p.ddelta)*k) ? q : p.pphi*q;
 			// compute kinda stupidly EV
 			double EV_inv = EV[i_kplus+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
 			double candidate = llambda*profit[i_k+i_K*nk+i_s*nk*nK] + mmu*( llambda*(-effective_price)*(k_grid[i_kplus]-(1-p.ddelta)*k) - llambda*convexadj + p.bbeta*EV_inv ) + (1-mmu)*p.bbeta*EV_noinvest;
@@ -507,7 +507,7 @@ int main(int argc, char ** argv)
 	p.ppsi_n       = 1;
 	p.aalpha0      = 0.95;
 	p.aalpha1      = 0.01;
-	p.eeta         = 0.1;
+	p.eeta         = 0.0;
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
 
@@ -539,7 +539,7 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 70.0;
+	double maxK = 15.0;
 	double minK = 0.5;
 	/* for (int i_k = 0; i_k < nk; i_k++) { */
 	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
@@ -595,9 +595,9 @@ int main(int argc, char ** argv)
 
 	// Create pricing grids
 	double minq = 0.8;
-	double maxq = 3.0;
+	double maxq = 1.8;
 	double minmarkup = 1.0;
-	double maxmarkup = 1.6;
+	double maxmarkup = 1.4;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
 
