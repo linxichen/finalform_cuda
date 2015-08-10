@@ -1,6 +1,6 @@
 #define nk           200
 #define nx           9
-#define nz           9
+#define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
 #define nK           50
@@ -88,8 +88,7 @@ struct updateprofit
 		int i_x       = (i_s-i_ssigmax*nx*nz-i_z*nx)/(1);
 		double x       = x_grid[i_x];
 		double z       = z_grid[i_z];
-		double ssigmax = ssigmax_grid[i_ssigmax];
-		double C = exp( r.pphi_CC + r.pphi_CK*log(K) + r.pphi_Cz*log(z) + r.pphi_Cssigmax*log(ssigmax)  );
+		double C = exp( (r.pphi_CC+r.pphi_Czind*i_z+r.pphi_Cssigmaxind*i_ssigmax+r.pphi_Cssigmaxindzind*i_ssigmax*i_z) + (r.pphi_CK+r.pphi_CssigmaxindK*i_ssigmax+r.pphi_CzindK*i_z+r.pphi_CssigmaxindzindK*i_ssigmax*i_z) * log(K) );
 		double w = p.ppsi_n*C;
 
 		// Find profit finally
@@ -150,11 +149,9 @@ struct updateU
 		double K = K_grid[i_K];
 		int i_ssigmax = i_s/(nx*nz);
 		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
-		double z       = z_grid[i_z];
-		double ssigmax = ssigmax_grid[i_ssigmax];
-		double C       = exp( r.pphi_CC + r.pphi_CK*log(K) + r.pphi_Cz*log(z) + r.pphi_Cssigmax*log(ssigmax)  );
-		double Kplus   = exp( r.pphi_KC + r.pphi_KK*log(K) + r.pphi_Kz*log(z) + r.pphi_Kssigmax*log(ssigmax)  );
-		double qplus   = exp( r.pphi_qC + r.pphi_qK*log(K) + r.pphi_qz*log(z) + r.pphi_qssigmax*log(ssigmax)  );
+		double C = exp( (r.pphi_CC+r.pphi_Czind*i_z+r.pphi_Cssigmaxind*i_ssigmax+r.pphi_Cssigmaxindzind*i_ssigmax*i_z) + (r.pphi_CK+r.pphi_CssigmaxindK*i_ssigmax+r.pphi_CzindK*i_z+r.pphi_CssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double Kplus = exp( (r.pphi_KC+r.pphi_Kzind*i_z+r.pphi_Kssigmaxind*i_ssigmax+r.pphi_Kssigmaxindzind*i_ssigmax*i_z) + (r.pphi_KK+r.pphi_KssigmaxindK*i_ssigmax+r.pphi_KzindK*i_z+r.pphi_KssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double qplus = exp( (r.pphi_qC+r.pphi_qzind*i_z+r.pphi_qssigmaxind*i_ssigmax+r.pphi_qssigmaxindzind*i_ssigmax*i_z) + (r.pphi_qK+r.pphi_qssigmaxindK*i_ssigmax+r.pphi_qzindK*i_z+r.pphi_qssigmaxindzindK*i_ssigmax*i_z) * log(K) );
 		double llambda = 1/C;
 		int i_Kplus = fit2grid(Kplus,nK,K_grid);
 		int i_qplus = fit2grid(qplus,nq,q_grid);
@@ -247,12 +244,11 @@ struct updateWV
 		double k       = k_grid[i_k];
 		double K       = K_grid[i_K];
 		double q       = q_grid[i_q];
-		double z       = z_grid[i_z];
-		double ssigmax = ssigmax_grid[i_ssigmax];
-		double C      = exp(r.pphi_CC      + r.pphi_CK*log(K)      + r.pphi_Cz*log(z)      + r.pphi_Cssigmax*log(ssigmax)      );
-		double Kplus  = exp(r.pphi_KC      + r.pphi_KK*log(K)      + r.pphi_Kz*log(z)      + r.pphi_Kssigmax*log(ssigmax)      );
-		double qplus  = exp(r.pphi_qC      + r.pphi_qK*log(K)      + r.pphi_qz*log(z)      + r.pphi_qssigmax*log(ssigmax)      );
-		double ttheta = exp(r.pphi_tthetaC + r.pphi_tthetaK*log(K) + r.pphi_tthetaz*log(z) + r.pphi_tthetassigmax*log(ssigmax) + r.pphi_tthetaq*log(q) );
+		double C = exp( (r.pphi_CC+r.pphi_Czind*i_z+r.pphi_Cssigmaxind*i_ssigmax+r.pphi_Cssigmaxindzind*i_ssigmax*i_z) + (r.pphi_CK+r.pphi_CssigmaxindK*i_ssigmax+r.pphi_CzindK*i_z+r.pphi_CssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double Kplus = exp( (r.pphi_KC+r.pphi_Kzind*i_z+r.pphi_Kssigmaxind*i_ssigmax+r.pphi_Kssigmaxindzind*i_ssigmax*i_z) + (r.pphi_KK+r.pphi_KssigmaxindK*i_ssigmax+r.pphi_KzindK*i_z+r.pphi_KssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double qplus = exp( (r.pphi_qC+r.pphi_qzind*i_z+r.pphi_qssigmaxind*i_ssigmax+r.pphi_qssigmaxindzind*i_ssigmax*i_z) + (r.pphi_qK+r.pphi_qssigmaxindK*i_ssigmax+r.pphi_qzindK*i_z+r.pphi_qssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double ttheta = exp( (r.pphi_tthetaC+r.pphi_tthetazind*i_z+r.pphi_tthetassigmaxind*i_ssigmax+r.pphi_tthetassigmaxindzind*i_ssigmax*i_z) + (r.pphi_tthetaK+r.pphi_tthetassigmaxindK*i_ssigmax+r.pphi_tthetazindK*i_z+r.pphi_tthetassigmaxindzindK*i_ssigmax*i_z) * log(K) + r.pphi_tthetaq*log(q) );
+
 		double llambda = 1/C;
 		double mmu = p.aalpha*pow(ttheta,p.aalpha1);
 		int i_Kplus = fit2grid(Kplus,nK,K_grid);
@@ -538,7 +534,7 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 200.0;
+	double maxK = 30.0;
 	double minK = maxK*pow((1-p.ddelta),nk-1);
 	for (int i_k = 0; i_k < nk; i_k++) {
 		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
@@ -546,15 +542,20 @@ int main(int argc, char ** argv)
 	/* linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
 	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
-	// Create shocks grids and transition matrix
+	// Create TFP grids and transition matrix
 	h_ssigmax_grid[0] = p.ssigmax_low;
 	h_ssigmax_grid[1] = p.ssigmax_high;
 	double* h_logZ_ptr = thrust::raw_pointer_cast(h_logZ.data());
 	double* h_PZ_ptr   = thrust::raw_pointer_cast(  h_PZ.data());
-	tauchen(p.rrhoz, p.ssigmaz, h_logZ, h_PZ, tauchenwidth); // in #include "cuda_helpers.h"
-	for (int i_z = 0; i_z < nz; i_z++) {
-		h_z_grid[i_z] = exp(h_logZ[i_z]);
-	};
+	/* tauchen(p.rrhoz, p.ssigmaz, h_logZ, h_PZ, tauchenwidth); // in #include "cuda_helpers.h" */
+	/* for (int i_z = 0; i_z < nz; i_z++) { */
+	/* 	h_z_grid[i_z] = exp(h_logZ[i_z]); */
+	/* }; */
+	h_z_grid[0] = 0.99; h_z_grid[1] = 1.01;
+	h_PZ[0] = 0.875;   h_PZ[2] = 1-0.875;
+	h_PZ[1] = 1-0.875; h_PZ[3] = 0.875;
+
+	// create idio prod grid and transition
 	double* h_logX_ptr    = thrust::raw_pointer_cast(h_logX   .data());
 	double* h_PX_low_ptr  = thrust::raw_pointer_cast(h_PX_low .data());
 	double* h_PX_high_ptr = thrust::raw_pointer_cast(h_PX_high.data());
@@ -597,23 +598,43 @@ int main(int argc, char ** argv)
 
 	// set initial agg rules
 	aggrules r;
-	r.pphi_qC = log((maxq+minq)/2.0); // constant term
+	r.pphi_qC = log(1.01); // constant term
+	r.pphi_qzind = 0; // w.r.t agg TFP
+	r.pphi_qssigmaxind = 0; // w.r.t uncertainty
+	r.pphi_qssigmaxindzind = 0; // w.r.t uncertainty
 	r.pphi_qK = 0; // w.r.t agg K
-	r.pphi_qz = 0; // w.r.t agg TFP
-	r.pphi_qssigmax = 0; // w.r.t uncertainty
-	r.pphi_KK = 0.99;
-	r.pphi_KC = log((maxK+minK)/2.0);
-	r.pphi_Kz = 0;
-	r.pphi_Kssigmax = 0;// Aggregate Law of motion for aggregate capital
-	r.pphi_CC = log((maxq+minq)/(maxmarkup+minmarkup)/p.ppsi_n);
-	r.pphi_CK = 0.0;
-	r.pphi_Cz = 0.0;
-	r.pphi_Cssigmax = 0.0;
-	r.pphi_tthetaC = log(0.95); // tightness ratio depends on q
-	r.pphi_tthetaK = 0.0;
-	r.pphi_tthetaz = 0.0;
-	r.pphi_tthetassigmax = 0.0;
+	r.pphi_qssigmaxindK = 0; // w.r.t agg K
+	r.pphi_qzindK = 0; // w.r.t agg K
+	r.pphi_qssigmaxindzindK = 0; // w.r.t agg K
+
+	r.pphi_KC = log(1); // constant term
+	r.pphi_Kzind = 0; // w.r.t agg TFP
+	r.pphi_Kssigmaxind = 0; // w.r.t uncertainty
+	r.pphi_Kssigmaxindzind = 0; // w.r.t uncertainty
+	r.pphi_KK = 0.99; // w.r.t agg K
+	r.pphi_KssigmaxindK = 0; // w.r.t agg K
+	r.pphi_KzindK = 0; // w.r.t agg K
+	r.pphi_KssigmaxindzindK = 0; // w.r.t agg K
+
+	r.pphi_CC = log((maxq+minq)/(maxmarkup+minmarkup)/p.ppsi_n); // constant term
+	r.pphi_Czind = 0; // w.r.t agg TFP
+	r.pphi_Cssigmaxind = 0; // w.r.t uncertainty
+	r.pphi_Cssigmaxindzind = 0; // w.r.t uncertainty
+	r.pphi_CK = 0.0; // w.r.t agg K
+	r.pphi_CssigmaxindK = 0; // w.r.t agg K
+	r.pphi_CzindK = 0; // w.r.t agg K
+	r.pphi_CssigmaxindzindK = 0; // w.r.t agg K
+
+	r.pphi_tthetaC = log(0.95); // constant term
+	r.pphi_tthetazind = 0; // w.r.t agg TFP
+	r.pphi_tthetassigmaxind = 0; // w.r.t uncertainty
+	r.pphi_tthetassigmaxindzind = 0; // w.r.t uncertainty
+	r.pphi_tthetaK = 0.0; // w.r.t agg K
+	r.pphi_tthetassigmaxindK = 0; // w.r.t agg K
+	r.pphi_tthetazindK = 0; // w.r.t agg K
+	r.pphi_tthetassigmaxindzindK = 0; // w.r.t agg K
 	r.pphi_tthetaq = 0.1;// lower q -- more firms invest -- lower ttheta
+
 	r.loadfromfile("./results/aggrules.csv");
 
 	// Copy to the device
@@ -841,7 +862,7 @@ int main(int argc, char ** argv)
 			Kind_sim[t] = fit2grid(K_sim[t],nK,thrust::raw_pointer_cast(h_K_grid.data()));
 
 			// find current wage from aggregate things
-			double C = exp( r.pphi_CC + r.pphi_CK*log(K_sim.hvec[t]) + r.pphi_Cssigmax*log(ssigmax_sim.hvec[t]) + r.pphi_Cz*log(z_sim.hvec[t]) );
+			double C = exp( (r.pphi_CC+r.pphi_Czind*zind_sim[t]+r.pphi_Cssigmaxind*ssigmaxind_sim[t]+r.pphi_Cssigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_CK+r.pphi_CssigmaxindK*ssigmaxind_sim[t]+r.pphi_CzindK*zind_sim[t]+r.pphi_CssigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) );
 			double w = p.ppsi_n*C;
 			double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold);
 			int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold);
@@ -855,7 +876,7 @@ int main(int argc, char ** argv)
 				// find current variables
 				double q           = h_markup_grid[i_markup]*w;
 				int i_q            = fit2grid(q, nq, thrust::raw_pointer_cast(h_q_grid.data()));
-				double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(q) );
+				double ttheta_temp = exp( (r.pphi_tthetaC+r.pphi_tthetazind*zind_sim[t]+r.pphi_tthetassigmaxind*ssigmaxind_sim[t]+r.pphi_tthetassigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_tthetaK+r.pphi_tthetassigmaxindK*ssigmaxind_sim[t]+r.pphi_tthetazindK*zind_sim[t]+r.pphi_tthetassigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) + r.pphi_tthetaq*log(q) );
 				double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
 
 				// compute profit from each hh
@@ -893,7 +914,7 @@ int main(int argc, char ** argv)
 			q_sim[t] = qmax;
 
 			// evolution under qmax!
-			double ttheta_temp = exp( r.pphi_tthetaC + r.pphi_tthetaK*log(K_sim.hvec[t]) + r.pphi_tthetassigmax*log(ssigmax_sim.hvec[t]) + r.pphi_tthetaz*log(z_sim.hvec[t]) + r.pphi_tthetaq*log(qmax) );
+			double ttheta_temp = exp( (r.pphi_tthetaC+r.pphi_tthetazind*zind_sim[t]+r.pphi_tthetassigmaxind*ssigmaxind_sim[t]+r.pphi_tthetassigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_tthetaK+r.pphi_tthetassigmaxindK*ssigmaxind_sim[t]+r.pphi_tthetazindK*zind_sim[t]+r.pphi_tthetassigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) + r.pphi_tthetaq*log(qmax) ) ;
 			double mmu_temp    = p.aalpha0*pow(ttheta_temp,p.aalpha1);
 			thrust::for_each(
 				begin_hh,
@@ -932,13 +953,46 @@ int main(int argc, char ** argv)
 			};
 		};
 
-		// regression
-		double bbeta[5];
-		double* X[4];
-		X[0] = K_sim.hptr;
-		X[1] = z_sim.hptr;
-		X[2] = ssigmax_sim.hptr;
-		X[3] = q_sim.hptr;
+		// prepare regressors.
+		cudavec<double> constant(SIMULPERIOD,1.0);
+		cudavec<double> ssigmaxind(SIMULPERIOD,0);  /// remember we need to use lag ssigmax as uncertainty
+		cudavec<double> zind(SIMULPERIOD,0);
+		cudavec<double> ssigmaxindzind(SIMULPERIOD,0);  /// remember we need to use lag ssigmax as uncertainty
+		cudavec<double> logK(SIMULPERIOD,0);
+		cudavec<double> logq(SIMULPERIOD,1.0);
+		cudavec<double> logC(SIMULPERIOD,1.0);
+		cudavec<double> logttheta(SIMULPERIOD,1.0);
+		cudavec<double> ssigmaxindK(SIMULPERIOD,0);
+		cudavec<double> zindK(SIMULPERIOD,0);
+		cudavec<double> ssigmaxindzindK(SIMULPERIOD,0);
+		for (int t = 0; t < SIMULPERIOD; t++) {
+			if (t==0) {     /// assuming at time 0 uncertainty is low, meaning ssigma_x at time -1 is low
+				ssigmaxindzind[t] = 0;
+				ssigmaxind[t] = 0;
+			} else {
+				ssigmaxind[t] = ssigmaxind_sim[t-1];
+				ssigmaxindzind[t] = ssigmaxind[t]*double(zind_sim[t]);
+			}
+			logK[t] = log(K_sim[t]);
+			logq[t] = log(q_sim[t]);
+			logC[t] = log(C_sim[t]);
+			logttheta[t] = log(ttheta_sim[t]);
+			ssigmaxindK[t] = ssigmaxind[t]*logK[t];
+			zind[t] = double(zind_sim[t]);
+			zindK[t] = zind[t]*logK[t];
+			ssigmaxindzindK[t] = ssigmaxind[t]*zind[t]*logK[t];
+		};
+		double bbeta[9];
+		double* X[9];
+		X[0] = constant.hptr;
+		X[1] = ssigmaxind.hptr;
+		X[2] = zind.hptr;
+		X[3] = ssigmaxindzind.hptr;
+		X[4] = logK.hptr;
+		X[5] = ssigmaxindK.hptr;
+		X[6] = zindK.hptr;
+		X[7] = ssigmaxindzindK.hptr;
+		X[8] = logq.hptr;
 
 		// save simulations
 		save_vec(K_sim,"./results/K_sim.csv");             // in #include "cuda_helpers.h"
@@ -949,34 +1003,50 @@ int main(int argc, char ** argv)
 		save_vec(ttheta_sim,"./results/ttheta_sim.csv");       // in #include "cuda_helpers.h"
 
 		// run each regression and report
-		double Rsq_K = logOLS(K_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
-		r.pphi_KC       = (1-damp)*r.pphi_KC       + damp*bbeta[0];
-		r.pphi_KK       = (1-damp)*r.pphi_KK       + damp*bbeta[1];
-		r.pphi_Kz       = (1-damp)*r.pphi_Kz       + damp*bbeta[2];
-		r.pphi_Kssigmax = (1-damp)*r.pphi_Kssigmax + damp*bbeta[3];
-		printf("Rsq_K = %.4f, log(Kplus) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_K,r.pphi_KC,r.pphi_KK,r.pphi_Kssigmax,r.pphi_Kz);
+		double Rsq_K = levelOLS(logK.hptr+1,X,SIMULPERIOD-1,8,bbeta);
+		r.pphi_KC               = (1.0-damp)*r.pphi_KC               + damp*bbeta[0];
+		r.pphi_Kssigmaxind      = (1.0-damp)*r.pphi_Kssigmaxind      + damp*bbeta[1];
+		r.pphi_Kzind            = (1.0-damp)*r.pphi_Kzind            + damp*bbeta[2];
+		r.pphi_Kssigmaxindzind  = (1.0-damp)*r.pphi_Kssigmaxindzind  + damp*bbeta[3];
+		r.pphi_KK               = (1.0-damp)*r.pphi_KK               + damp*bbeta[4];
+		r.pphi_KssigmaxindK     = (1.0-damp)*r.pphi_KssigmaxindK     + damp*bbeta[5];
+		r.pphi_KzindK           = (1.0-damp)*r.pphi_KzindK           + damp*bbeta[6];
+		r.pphi_KssigmaxindzindK = (1.0-damp)*r.pphi_KssigmaxindzindK + damp*bbeta[7];
+		printf("Rsq_K = %.4f, log(Kplus) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_K,r.pphi_KC,r.pphi_Kssigmaxind,r.pphi_Kzind,r.pphi_Kssigmaxindzind,r.pphi_KK,r.pphi_KssigmaxindK,r.pphi_KzindK,r.pphi_KssigmaxindzindK);
 
-		double Rsq_q = logOLS(q_sim.hptr+1,X,SIMULPERIOD-1,3,bbeta);
-		r.pphi_qC       = (1-damp)*r.pphi_qC       + damp*bbeta[0];
-		r.pphi_qK       = (1-damp)*r.pphi_qK       + damp*bbeta[1];
-		r.pphi_qz       = (1-damp)*r.pphi_qz       + damp*bbeta[2];
-		r.pphi_qssigmax = (1-damp)*r.pphi_qssigmax + damp*bbeta[3];
-		printf("Rsq_q = %.4f, log(qplus) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_q,r.pphi_qC,r.pphi_qK,r.pphi_qssigmax,r.pphi_qz);
+		double Rsq_q = levelOLS(logq.hptr+1,X,SIMULPERIOD-1,8,bbeta);
+		r.pphi_qC               = (1.0-damp)*r.pphi_qC               + damp*bbeta[0];
+		r.pphi_qssigmaxind      = (1.0-damp)*r.pphi_qssigmaxind      + damp*bbeta[1];
+		r.pphi_qzind            = (1.0-damp)*r.pphi_qzind            + damp*bbeta[2];
+		r.pphi_qssigmaxindzind  = (1.0-damp)*r.pphi_qssigmaxindzind  + damp*bbeta[3];
+		r.pphi_qK               = (1.0-damp)*r.pphi_qK               + damp*bbeta[4];
+		r.pphi_qssigmaxindK     = (1.0-damp)*r.pphi_qssigmaxindK     + damp*bbeta[5];
+		r.pphi_qzindK           = (1.0-damp)*r.pphi_qzindK           + damp*bbeta[6];
+		r.pphi_qssigmaxindzindK = (1.0-damp)*r.pphi_qssigmaxindzindK + damp*bbeta[7];
+		printf("Rsq_q = %.4f, log(qplus) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_q,r.pphi_qC,r.pphi_qssigmaxind,r.pphi_qzind,r.pphi_qssigmaxindzind,r.pphi_qK,r.pphi_qssigmaxindK,r.pphi_qzindK,r.pphi_qssigmaxindzindK);
 
-		double Rsq_C = logOLS(C_sim.hptr,X,SIMULPERIOD,3,bbeta);
-		r.pphi_CC       = (1-damp)*r.pphi_CC       + damp*bbeta[0];
-		r.pphi_CK       = (1-damp)*r.pphi_CK       + damp*bbeta[1];
-		r.pphi_Cz       = (1-damp)*r.pphi_Cz       + damp*bbeta[2];
-		r.pphi_Cssigmax = (1-damp)*r.pphi_Cssigmax + damp*bbeta[3];
-		printf("Rsq_C = %.4f, log(C) = %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z).\n",Rsq_C,r.pphi_CC,r.pphi_CK,r.pphi_Cssigmax,r.pphi_Cz);
+		double Rsq_C = levelOLS(logC.hptr,X,SIMULPERIOD,8,bbeta);
+		r.pphi_CC               = (1.0-damp)*r.pphi_CC               + damp*bbeta[0];
+		r.pphi_Cssigmaxind      = (1.0-damp)*r.pphi_Cssigmaxind      + damp*bbeta[1];
+		r.pphi_Czind            = (1.0-damp)*r.pphi_Czind            + damp*bbeta[2];
+		r.pphi_Cssigmaxindzind  = (1.0-damp)*r.pphi_Cssigmaxindzind  + damp*bbeta[3];
+		r.pphi_CK               = (1.0-damp)*r.pphi_CK               + damp*bbeta[4];
+		r.pphi_CssigmaxindK     = (1.0-damp)*r.pphi_CssigmaxindK     + damp*bbeta[5];
+		r.pphi_CzindK           = (1.0-damp)*r.pphi_CzindK           + damp*bbeta[6];
+		r.pphi_CssigmaxindzindK = (1.0-damp)*r.pphi_CssigmaxindzindK + damp*bbeta[7];
+		printf("Rsq_C = %.4f, log(C) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_C,r.pphi_CC,r.pphi_Cssigmaxind,r.pphi_Czind,r.pphi_Cssigmaxindzind,r.pphi_CK,r.pphi_CssigmaxindK,r.pphi_CzindK,r.pphi_CssigmaxindzindK);
 
-		double Rsq_ttheta = logOLS(ttheta_sim.hptr,X,SIMULPERIOD,4,bbeta);
-		r.pphi_tthetaC       = (1-damp)*r.pphi_tthetaC       + damp*bbeta[0];
-		r.pphi_tthetaK       = (1-damp)*r.pphi_tthetaK       + damp*bbeta[1];
-		r.pphi_tthetaz       = (1-damp)*r.pphi_tthetaz       + damp*bbeta[2];
-		r.pphi_tthetassigmax = (1-damp)*r.pphi_tthetassigmax + damp*bbeta[3];
-		r.pphi_tthetaq       = (1-damp)*r.pphi_tthetaq       + damp*bbeta[4];
-		printf("Rsq_ttheta = %.4f, log(ttheta) tthetathetatheta %.4f + %.4f * log(K) + %.4f * log(ssigmax)+%.4f * log(z) + %.4f*log(q).\n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetaK,r.pphi_tthetassigmax,r.pphi_tthetaz,r.pphi_tthetaq);
+		double Rsq_ttheta = levelOLS(logttheta.hptr,X,SIMULPERIOD,9,bbeta);
+		r.pphi_tthetaC               = (1.0-damp)*r.pphi_tthetaC               + damp*bbeta[0];
+		r.pphi_tthetassigmaxind      = (1.0-damp)*r.pphi_tthetassigmaxind      + damp*bbeta[1];
+		r.pphi_tthetazind            = (1.0-damp)*r.pphi_tthetazind            + damp*bbeta[2];
+		r.pphi_tthetassigmaxindzind  = (1.0-damp)*r.pphi_tthetassigmaxindzind  + damp*bbeta[3];
+		r.pphi_tthetaK               = (1.0-damp)*r.pphi_tthetaK               + damp*bbeta[4];
+		r.pphi_tthetassigmaxindK     = (1.0-damp)*r.pphi_tthetassigmaxindK     + damp*bbeta[5];
+		r.pphi_tthetazindK           = (1.0-damp)*r.pphi_tthetazindK           + damp*bbeta[6];
+		r.pphi_tthetassigmaxindzindK = (1.0-damp)*r.pphi_tthetassigmaxindzindK + damp*bbeta[7];
+		r.pphi_tthetaq               = (1.0-damp)*r.pphi_tthetaq               + damp*bbeta[8];
+		printf("Rsq_ttheta = %.4f, log(ttheta) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetassigmaxind,r.pphi_tthetazind,r.pphi_tthetassigmaxindzind,r.pphi_tthetaK,r.pphi_tthetassigmaxindK,r.pphi_tthetazindK,r.pphi_tthetassigmaxindzindK,r.pphi_tthetaq);
 
 		outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_ttheta));
 
