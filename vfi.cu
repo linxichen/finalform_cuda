@@ -250,7 +250,7 @@ struct updateWV
 		double ttheta = exp( (r.pphi_tthetaC+r.pphi_tthetazind*i_z+r.pphi_tthetassigmaxind*i_ssigmax+r.pphi_tthetassigmaxindzind*i_ssigmax*i_z) + (r.pphi_tthetaK+r.pphi_tthetassigmaxindK*i_ssigmax+r.pphi_tthetazindK*i_z+r.pphi_tthetassigmaxindzindK*i_ssigmax*i_z) * log(K) + r.pphi_tthetaq*log(q) );
 
 		double llambda = 1/C;
-		double mmu = p.aalpha*pow(ttheta,p.aalpha1);
+		double mmu = p.aalpha0*pow(ttheta,p.aalpha1);
 		int i_Kplus = fit2grid(Kplus,nK,K_grid);
 		int i_qplus = fit2grid(qplus,nq,q_grid);
 
@@ -286,16 +286,21 @@ struct updateWV
 			};
 		};
 
+		// I can find U here
+		double U = llambda*profit[i_k+i_K*nk+i_s*nk*nK] + p.bbeta*EV_noinvest;
+
 		// Find W and V finally
-		Vplus[index] = rhsmax;
+		if (rhsmax>U) {
+			Vplus[index]       = rhsmax;
 			koptindplus[index] = koptind_active;
-		if (k_grid[koptind_active] > (1-p.ddelta)*k) {
 			active[index]      = 1;
 			kopt[index]        = k_grid[koptind_active];
 		} else {
+			Vplus[index]       = U;
+			koptindplus[index] = noinvest_ind;
 			active[index]      = 0;
 			kopt[index]        = (1-p.ddelta)*k;
-		};
+		}
 	};
 };
 
@@ -534,12 +539,12 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 30.0;
-	double minK = maxK*pow((1-p.ddelta),nk-1);
-	for (int i_k = 0; i_k < nk; i_k++) {
-		h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k);
-	};
-	/* linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
+	double maxK = 70.0;
+	double minK = 0.5;
+	/* for (int i_k = 0; i_k < nk; i_k++) { */
+	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
+	/* }; */
+	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
 	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
 
 	// Create TFP grids and transition matrix
@@ -1046,7 +1051,7 @@ int main(int argc, char ** argv)
 		r.pphi_tthetazindK           = (1.0-damp)*r.pphi_tthetazindK           + damp*bbeta[6];
 		r.pphi_tthetassigmaxindzindK = (1.0-damp)*r.pphi_tthetassigmaxindzindK + damp*bbeta[7];
 		r.pphi_tthetaq               = (1.0-damp)*r.pphi_tthetaq               + damp*bbeta[8];
-		printf("Rsq_ttheta = %.4f, log(ttheta) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetassigmaxind,r.pphi_tthetazind,r.pphi_tthetassigmaxindzind,r.pphi_tthetaK,r.pphi_tthetassigmaxindK,r.pphi_tthetazindK,r.pphi_tthetassigmaxindzindK,r.pphi_tthetaq);
+		printf("Rsq_ttheta = %.4f, log(ttheta) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) + %.2f*log(q) \n",Rsq_ttheta,r.pphi_tthetaC,r.pphi_tthetassigmaxind,r.pphi_tthetazind,r.pphi_tthetassigmaxindzind,r.pphi_tthetaK,r.pphi_tthetassigmaxindK,r.pphi_tthetazindK,r.pphi_tthetassigmaxindzindK,r.pphi_tthetaq);
 
 		outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_ttheta));
 
