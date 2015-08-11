@@ -1,19 +1,20 @@
-#define nk           200
-#define nx           13
+#define nk           250
+#define nx           11
 #define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
-#define nK           50
-#define nq           50
-#define nmarkup      50
-#define tauchenwidth 3.0
-#define tol          1e-4
-#define outertol     1e-4
+#define nK           75
+#define nq           75
+#define nmarkup      75
+#define tauchenwidth 2.5
+#define tol          1e-5
+#define outertol     1e-5
 #define damp         0.5
 #define maxconsec    20
 #define maxiter      2000
 #define SIMULPERIOD  1000
-#define nhousehold   10000
+#define burnin       100
+#define nhousehold   30000
 #define kwidth       1.5
 
 /* Includes, system */
@@ -364,14 +365,16 @@ struct profitfromhh {
 	// operator to find profit from each household
 	__host__ __device__
 	void operator() (int index) {
+		int t = index/nhousehold;
+		int i_house = index - t*nhousehold;
 		int kind = kind_sim[index];
 		int xind = xind_sim[index];
 		int i_s  = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
 		if (matchshock[index] < mmu) {
-			profit_temp[index] = (q-w)*double(active[i_state])*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
+			profit_temp[i_house] = (q-w)*double(active[i_state])*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
 		} else {
-			profit_temp[index] = 0;
+			profit_temp[i_house] = 0;
 		};
 	};
 };
@@ -449,24 +452,32 @@ struct simulateforward {
 	// operator to find profit from each household
 	__host__ __device__
 	void operator() (int index) {
+		int t = index/nhousehold;
+		int i_house = index - t*nhousehold;
 		int kind    = kind_sim[index];
 		double k    = k_grid[kind];
 		int xind    = xind_sim[index];
 		int i_s     = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
-		if (matchshock[index] < mmu && active[i_state] == 1) {
-			kind_sim[index+nhousehold] = koptind[i_state];
-			k_sim[index+nhousehold] = k_grid[kind_sim[index+nhousehold]];
-		} else {
-			int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
-			kind_sim[index+nhousehold] = noinvest_ind;
-			k_sim[index+nhousehold] = (1-p.ddelta)*k;
+
+		// find tomorrow's value if t < T
+		if (t<SIMULPERIOD-1) {
+			if (matchshock[index] < mmu && active[i_state] == 1) {
+				kind_sim[i_house+(t+1)*nhousehold] = koptind[i_state];
+				k_sim[i_house+(t+1)*nhousehold] = k_grid[koptind[i_state]];
+			} else {
+				int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
+				kind_sim[i_house+(t+1)*nhousehold] = noinvest_ind;
+				k_sim[i_house+(t+1)*nhousehold] = (1-p.ddelta)*k;
+			};
 		};
+
+		// find current variables
 		double z = z_grid[zind];
 		double x = x_grid[xind];
 		double l = pow( w/z/x/p.v/pow(k,p.aalpha), 1.0/(p.v-1) );
-		clist[index] = z*x*pow(k,p.aalpha)*pow(l,p.v);
-		activelist[index] = active[i_state];
+		clist[i_house] = z*x*pow(k,p.aalpha)*pow(l,p.v);
+		activelist[i_house] = active[i_state];
 	};
 };
 
@@ -491,6 +502,9 @@ int main(int argc, char ** argv)
 		cudaSetDevice(gpu);
 	};
 
+	// set device heap memeory size.
+	cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1e8*sizeof(double));
+
 	// set parameters
 	para p; // in #include "invpricemodel.h"
 	p.bbeta        = 0.99;
@@ -507,8 +521,8 @@ int main(int argc, char ** argv)
 	p.ssigmax_low  = 0.04;
 	p.ssigmax_high = 0.04*3;
 	p.ppsi_n       = 1;
-	p.aalpha0      = 0.95;
-	p.aalpha1      = 0.8;
+	p.aalpha0      = 1.0;
+	p.aalpha1      = 0.5;
 	p.eeta         = 0.0;
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
@@ -541,8 +555,8 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 10.0;
-	double minK = 0.1;
+	double maxK = 30.0;
+	double minK = 0.01;
 	/* for (int i_k = 0; i_k < nk; i_k++) { */
 	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
 	/* }; */
@@ -596,10 +610,10 @@ int main(int argc, char ** argv)
 	cudavec<double> CDF_x_high(nx*nx,0);              pdf2cdf(h_PX_high_ptr,nx,CDF_x_high.hptr);         CDF_x_high.h2d();
 
 	// Create pricing grids
-	double minq = 0.5;
+	double minq = 0.9;
 	double maxq = 1.5;
 	double minmarkup = 1.0;
-	double maxmarkup = 1.4;
+	double maxmarkup = 1.2;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
 
@@ -729,7 +743,6 @@ int main(int argc, char ** argv)
 	};
 	zind_sim.h2d();
 	ssigmaxind_sim.h2d();
-	xind_sim.h2d();
 
 	// Prepare for cuBLAS things
 	cublasHandle_t handle;
@@ -739,19 +752,22 @@ int main(int argc, char ** argv)
 
 	// intialize simulaiton records
 	cudavec<double> K_sim(SIMULPERIOD,(h_K_grid[0]+h_K_grid[nK-1])/2);
-	cudavec<double> Kind_sim(SIMULPERIOD,(nK-1)/2);
+	cudavec<int>    Kind_sim(SIMULPERIOD,(nK-1)/2);
 	cudavec<double> k_sim(nhousehold*SIMULPERIOD,h_k_grid[(nk-1)/2]);
 	cudavec<int>    kind_sim(nhousehold*SIMULPERIOD,(nk-1)/2);
 	cudavec<double> profit_temp(nhousehold,0.0);
 	cudavec<double> clist(nhousehold,0.0);
-	cudavec<int>    activelist(nhousehold,0.0);
+	cudavec<int>    activelist(nhousehold,0);
 	cudavec<int>    qind_sim(SIMULPERIOD,(nq-1)/2);
 	cudavec<double> q_sim(SIMULPERIOD,h_q_grid[(nq-1)/2]);
 	cudavec<double> C_sim(SIMULPERIOD,0.0);
 	cudavec<double> mmu_sim(SIMULPERIOD,0.0);
+	k_sim.h2d();
+	kind_sim.h2d();
+	xind_sim.h2d();
 
 	double outer_Rsq=0.0;
-	while (outer_Rsq < 0.9) {
+	while (outer_Rsq < 0.85) {
 
 		// Create Timer
 		cudaEvent_t start, stop;
@@ -845,16 +861,17 @@ int main(int argc, char ** argv)
 				consec = 0;
 			};
 
-
-			std::cout << "diff is: "<< diff << std::endl;
-			std::cout << "consec is: "<< consec << std::endl;
+			if ( iter % 50 == 0) {
+				std::cout << "diff is: "<< diff << std::endl;
+				std::cout << "consec is: "<< consec << std::endl;
+				std::cout << iter << std::endl;
+				std::cout << "=====================" << std::endl;
+			};
 
 			// update correspondence
 			d_V       = d_Vplus;
 			d_koptind = d_koptindplus;
-
-			std::cout << ++iter << std::endl;
-			std::cout << "=====================" << std::endl;
+			iter++;
 		};
 		// VFI ends //
 
@@ -867,10 +884,11 @@ int main(int argc, char ** argv)
 			// find current wage from aggregate things
 			double C = exp( (r.pphi_CC+r.pphi_Czind*zind_sim[t]+r.pphi_Cssigmaxind*ssigmaxind_sim[t]+r.pphi_Cssigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_CK+r.pphi_CssigmaxindK*ssigmaxind_sim[t]+r.pphi_CzindK*zind_sim[t]+r.pphi_CssigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) );
 			double w = p.ppsi_n*C;
-			double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold);
-			int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold);
-			double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold);
-			int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold);
+			/* double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold); */
+			/* int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold); */
+			/* double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold); */
+			/* int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold); */
+			int ssigmaxind_lag     = (t==0) ? 0 : ssigmaxind_sim[t-1];
 
 			// given markup find optimal price for monopolist
 			double profitmax = -9999999;
@@ -884,8 +902,8 @@ int main(int argc, char ** argv)
 
 				// compute profit from each hh
 				thrust::for_each(
-					begin_hh,
-					end_hh,
+					begin_hh+t*nhousehold,
+					end_hh+t*nhousehold,
 					profitfromhh(
 						d_kopt_ptr,
 						d_active_ptr,
@@ -893,13 +911,13 @@ int main(int argc, char ** argv)
 						q,
 						w,
 						mmu,
-						matchshock_ptr,
+						innov_match.dptr,
 						Kind_sim[t],
 						i_q,
 						zind_sim.hvec[t],
-						ssigmaxind_sim.hvec[t],
-						kindlist_ptr,
-						xindlist_ptr,
+						ssigmaxind_lag,
+						kind_sim.dptr,
+						xind_sim.dptr,
 						p,
 						profit_temp.dptr
 					)
@@ -920,8 +938,8 @@ int main(int argc, char ** argv)
 			double mmu_temp = exp( (r.pphi_mmuC+r.pphi_mmuzind*zind_sim[t]+r.pphi_mmussigmaxind*ssigmaxind_sim[t]+r.pphi_mmussigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_mmuK+r.pphi_mmussigmaxindK*ssigmaxind_sim[t]+r.pphi_mmuzindK*zind_sim[t]+r.pphi_mmussigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) + r.pphi_mmuq*log(qmax) ) ;
 			/* double mmu_temp    = p.aalpha0*pow(ttheta_temp,p.aalpha1); */
 			thrust::for_each(
-				begin_hh,
-				end_hh,
+				begin_hh+t*nhousehold,
+				end_hh+t*nhousehold,
 				simulateforward(
 					d_kopt_ptr,
 					d_koptind_ptr,
@@ -932,14 +950,14 @@ int main(int argc, char ** argv)
 					qmax,
 					w,
 					mmu_temp,
-					matchshock_ptr,
+					innov_match.dptr,
 					Kind_sim[t],
 					i_qmax,
 					zind_sim.hvec[t],
-					ssigmaxind_sim.hvec[t],
-					kindlist_ptr,
-					klist_ptr,
-					xindlist_ptr,
+					ssigmaxind_lag,
+					kind_sim.dptr,
+					k_sim.dptr,
+					xind_sim.dptr,
 					clist.dptr,
 					activelist.dptr,
 					p
@@ -950,35 +968,30 @@ int main(int argc, char ** argv)
 			C_sim.hptr[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
 			int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
 			double ttheta = double(activecount)/double(nhousehold);
-			mmu_sim.hptr[t] = p.aalpha0*pow( 1.0+pow(ttheta,p.aalpha1)  , -1/p.aalpha1);
+			mmu_sim.hptr[t] = p.aalpha0*pow( 1.0+pow(ttheta,p.aalpha1) , -1.0/p.aalpha1);
 		};
 
 		// prepare regressors.
-		cudavec<double> constant(SIMULPERIOD,1.0);
-		cudavec<double> ssigmaxind(SIMULPERIOD,0);  /// remember we need to use lag ssigmax as uncertainty
-		cudavec<double> zind(SIMULPERIOD,0);
-		cudavec<double> ssigmaxindzind(SIMULPERIOD,0);  /// remember we need to use lag ssigmax as uncertainty
-		cudavec<double> logK(SIMULPERIOD,0);
-		cudavec<double> logq(SIMULPERIOD,1.0);
-		cudavec<double> logC(SIMULPERIOD,1.0);
-		cudavec<double> logmmu(SIMULPERIOD,1.0);
-		cudavec<double> ssigmaxindK(SIMULPERIOD,0);
-		cudavec<double> zindK(SIMULPERIOD,0);
-		cudavec<double> ssigmaxindzindK(SIMULPERIOD,0);
-		for (int t = 0; t < SIMULPERIOD; t++) {
-			if (t==0) {     /// assuming at time 0 uncertainty is low, meaning ssigma_x at time -1 is low
-				ssigmaxindzind[t] = 0;
-				ssigmaxind[t] = 0;
-			} else {
-				ssigmaxind[t] = ssigmaxind_sim[t-1];
-				ssigmaxindzind[t] = ssigmaxind[t]*double(zind_sim[t]);
-			}
-			logK[t] = log(K_sim[t]);
-			logq[t] = log(q_sim[t]);
-			logC[t] = log(C_sim[t]);
-			logmmu[t] = log(mmu_sim[t]);
+		cudavec<double> constant(SIMULPERIOD-burnin,1.0);
+		cudavec<double> ssigmaxind(SIMULPERIOD-burnin,0);  /// remember we need to use lag ssigmax as uncertainty
+		cudavec<double> zind(SIMULPERIOD-burnin,0);
+		cudavec<double> ssigmaxindzind(SIMULPERIOD-burnin,0);  /// remember we need to use lag ssigmax as uncertainty
+		cudavec<double> logK(SIMULPERIOD-burnin,0);
+		cudavec<double> logq(SIMULPERIOD-burnin,1.0);
+		cudavec<double> logC(SIMULPERIOD-burnin,1.0);
+		cudavec<double> logmmu(SIMULPERIOD-burnin,1.0);
+		cudavec<double> ssigmaxindK(SIMULPERIOD-burnin,0);
+		cudavec<double> zindK(SIMULPERIOD-burnin,0);
+		cudavec<double> ssigmaxindzindK(SIMULPERIOD-burnin,0);
+		for (int t = 0; t < SIMULPERIOD-burnin; t++) {
+			ssigmaxind[t] = ssigmaxind_sim[t-1+burnin];
+			ssigmaxindzind[t] = ssigmaxind[t]*double(zind_sim[t+burnin]);
+			logK[t] = log(K_sim[t+burnin]);
+			logq[t] = log(q_sim[t+burnin]);
+			logC[t] = log(C_sim[t+burnin]);
+			logmmu[t] = log(mmu_sim[t+burnin]);
 			ssigmaxindK[t] = ssigmaxind[t]*logK[t];
-			zind[t] = double(zind_sim[t]);
+			zind[t] = double(zind_sim[t+burnin]);
 			zindK[t] = zind[t]*logK[t];
 			ssigmaxindzindK[t] = ssigmaxind[t]*zind[t]*logK[t];
 		};
@@ -1003,7 +1016,7 @@ int main(int argc, char ** argv)
 		save_vec(mmu_sim,"./results/mmu_sim.csv");       // in #include "cuda_helpers.h"
 
 		// run each regression and report
-		double Rsq_K = levelOLS(logK.hptr+1,X,SIMULPERIOD-1,8,bbeta);
+		double Rsq_K = levelOLS(logK.hptr+1,X,SIMULPERIOD-1-burnin,8,bbeta);
 		r.pphi_KC               = (1.0-damp)*r.pphi_KC               + damp*bbeta[0];
 		r.pphi_Kssigmaxind      = (1.0-damp)*r.pphi_Kssigmaxind      + damp*bbeta[1];
 		r.pphi_Kzind            = (1.0-damp)*r.pphi_Kzind            + damp*bbeta[2];
@@ -1014,7 +1027,7 @@ int main(int argc, char ** argv)
 		r.pphi_KssigmaxindzindK = (1.0-damp)*r.pphi_KssigmaxindzindK + damp*bbeta[7];
 		printf("Rsq_K = %.4f, log(Kplus) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_K,r.pphi_KC,r.pphi_Kssigmaxind,r.pphi_Kzind,r.pphi_Kssigmaxindzind,r.pphi_KK,r.pphi_KssigmaxindK,r.pphi_KzindK,r.pphi_KssigmaxindzindK);
 
-		double Rsq_q = levelOLS(logq.hptr+1,X,SIMULPERIOD-1,8,bbeta);
+		double Rsq_q = levelOLS(logq.hptr+1,X,SIMULPERIOD-1-burnin,8,bbeta);
 		r.pphi_qC               = (1.0-damp)*r.pphi_qC               + damp*bbeta[0];
 		r.pphi_qssigmaxind      = (1.0-damp)*r.pphi_qssigmaxind      + damp*bbeta[1];
 		r.pphi_qzind            = (1.0-damp)*r.pphi_qzind            + damp*bbeta[2];
@@ -1025,7 +1038,7 @@ int main(int argc, char ** argv)
 		r.pphi_qssigmaxindzindK = (1.0-damp)*r.pphi_qssigmaxindzindK + damp*bbeta[7];
 		printf("Rsq_q = %.4f, log(qplus) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_q,r.pphi_qC,r.pphi_qssigmaxind,r.pphi_qzind,r.pphi_qssigmaxindzind,r.pphi_qK,r.pphi_qssigmaxindK,r.pphi_qzindK,r.pphi_qssigmaxindzindK);
 
-		double Rsq_C = levelOLS(logC.hptr,X,SIMULPERIOD,8,bbeta);
+		double Rsq_C = levelOLS(logC.hptr,X,SIMULPERIOD-burnin,8,bbeta);
 		r.pphi_CC               = (1.0-damp)*r.pphi_CC               + damp*bbeta[0];
 		r.pphi_Cssigmaxind      = (1.0-damp)*r.pphi_Cssigmaxind      + damp*bbeta[1];
 		r.pphi_Czind            = (1.0-damp)*r.pphi_Czind            + damp*bbeta[2];
@@ -1036,7 +1049,7 @@ int main(int argc, char ** argv)
 		r.pphi_CssigmaxindzindK = (1.0-damp)*r.pphi_CssigmaxindzindK + damp*bbeta[7];
 		printf("Rsq_C = %.4f, log(C) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_C,r.pphi_CC,r.pphi_Cssigmaxind,r.pphi_Czind,r.pphi_Cssigmaxindzind,r.pphi_CK,r.pphi_CssigmaxindK,r.pphi_CzindK,r.pphi_CssigmaxindzindK);
 
-		double Rsq_mmu = levelOLS(logmmu.hptr,X,SIMULPERIOD,8,bbeta);
+		double Rsq_mmu = levelOLS(logmmu.hptr,X,SIMULPERIOD-burnin,8,bbeta);
 		r.pphi_mmuC               = (1.0-damp)*r.pphi_mmuC               + damp*bbeta[0];
 		r.pphi_mmussigmaxind      = (1.0-damp)*r.pphi_mmussigmaxind      + damp*bbeta[1];
 		r.pphi_mmuzind            = (1.0-damp)*r.pphi_mmuzind            + damp*bbeta[2];

@@ -20,7 +20,7 @@ LDIR = ./cudatools/lib
 NVCC = nvcc
 
 # CUDA compiling options
-NVCCFLAGS = -arch sm_30 #-use_fast_math
+NVCCFLAGS = -lineinfo -g -arch sm_30 #-use_fast_math
 
 # Compiler for C code
 CXX = g++
@@ -34,7 +34,7 @@ LDLIBS += -lstdc++ -lcublas -lcurand -lcudart -lcudadevrt -larmadillo -lopenblas
 # List Executables and Objects
 EXEC = vfi
 
-all : $(EXEC) runvfi
+all : veryclean $(EXEC)
 
 # Link objects from CUDA and C++ codes
 $(EXEC) : vfi_dlink.o vfi.o $(LDIR)/libcudatools.a
