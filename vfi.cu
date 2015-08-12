@@ -1,11 +1,11 @@
-#define nk           250
+#define nk           500
 #define nx           11
 #define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
-#define nK           75
-#define nq           75
-#define nmarkup      75
+#define nK           30
+#define nq           150
+#define nmarkup      150
 #define tauchenwidth 2.5
 #define tol          1e-5
 #define outertol     1e-5
@@ -522,7 +522,7 @@ int main(int argc, char ** argv)
 	p.ssigmax_high = 0.04*3;
 	p.ppsi_n       = 1;
 	p.aalpha0      = 1.0;
-	p.aalpha1      = 0.5;
+	p.aalpha1      = 9.0;
 	p.eeta         = 0.0;
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
