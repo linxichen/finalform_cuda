@@ -14,3 +14,4 @@ ssigmax_high=0.12;
 ppsi_n=      1;
 aalpha0=     0.95;
 aalpha1=     0;
+eeta=        0;

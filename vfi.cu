@@ -9,7 +9,7 @@
 #define tauchenwidth 2.5
 #define tol          1e-5
 #define outertol     1e-5
-#define damp         0.0
+#define damp         0.5
 #define maxconsec    30
 #define maxiter      2000
 #define SIMULPERIOD  3000
@@ -527,6 +527,10 @@ int main(int argc, char ** argv)
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
 
+	// Export parameters to MATLAB
+	p.exportmatlab("./MATLAB/vfi_para.m");
+
+
 	// Create all STATE, SHOCK grids here
 	h_vec_d h_k_grid(nk,0.0);
 	h_vec_d h_K_grid(nK,0.0);
@@ -616,6 +620,19 @@ int main(int argc, char ** argv)
 	double maxmarkup = 1.3;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
+
+	// At this point good idea to save all created grids
+	save_vec(h_K_grid,"./results/K_grid.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_k_grid,"./results/k_grid.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_q_grid,"./results/q_grid.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_markup_grid,"./results/markup_grid.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_x_grid,"./results/x_grid.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_z_grid,"./results/z_grid.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_ssigmax_grid,"./results/ssigmax_grid.csv"); // in #include "cuda_helpers.h"
+	save_vec(h_PZ,"./results/PZ.csv");                     // in #include "cuda_helpers.h"
+	save_vec(h_PX_low,"./results/PX_low.csv");             // in #include "cuda_helpers.h"
+	save_vec(h_PX_high,"./results/PX_high.csv");           // in #include "cuda_helpers.h"
+	save_vec(h_P,"./results/P.csv");                       // in #include "cuda_helpers.h"
 
 	// set initial agg rules
 	aggrules r;
@@ -1082,20 +1099,13 @@ int main(int argc, char ** argv)
 		h_profit  = d_profit;
 
 		r.savetofile("./results/aggrules.csv");
-		save_vec(h_K_grid,"./results/K_grid.csv");         // in #include "cuda_helpers.h"
-		save_vec(h_k_grid,"./results/k_grid.csv");         // in #include "cuda_helpers.h"
-		save_vec(h_q_grid,"./results/q_grid.csv");         // in #include "cuda_helpers.h"
 		save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h"
 		save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
 		save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
 		save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h"
-		save_vec(h_P,"./results/P.csv");             // in #include "cuda_helpers.h"
 		std::cout << "Policy functions output completed." << std::endl;
 	}
 
-
-	// Export parameters to MATLAB
-	p.exportmatlab("./MATLAB/vfi_para.m");
 
 	// to be safe destroy cuBLAS handle
 	cublasDestroy(handle);

@@ -1,6 +1,11 @@
 #ifndef __MODEL__
 #define __MODEL__
 
+#include <fstream>
+#include <iostream>
+#include <iomanip>
+#include <string>
+
 // Define an class that contains parameters and steady states
 struct para {
 	// Model parameters
@@ -27,22 +32,23 @@ struct para {
 	__host__
 	void exportmatlab(std::string filename) {
 		std::ofstream fileout(filename.c_str(), std::ofstream::trunc);
-		fileout << std::setprecision(16) << "bbeta=       " << bbeta          << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ttau=        " << ttau           << ";"<< std::endl;
-		fileout << std::setprecision(16) << "aalpha=      " << aalpha         << ";"<< std::endl;
-		fileout << std::setprecision(16) << "v=           " << v              << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ddelta=      " << ddelta         << ";"<< std::endl;
-		fileout << std::setprecision(16) << "pphi=        " << pphi           << ";"<< std::endl;
-		fileout << std::setprecision(16) << "MC=          " << MC             << ";"<< std::endl;
-		fileout << std::setprecision(16) << "rrhox=       " << rrhox          << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ppsi=        " << ppsi           << ";"<< std::endl;
-		fileout << std::setprecision(16) << "rrhoz=       " << rrhoz          << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ssigmaz=     " << ssigmaz        << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ssigmax_low= " << ssigmax_low    << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ssigmax_high=" << ssigmax_high   << ";"<< std::endl;
-		fileout << std::setprecision(16) << "ppsi_n=      " << ppsi_n         << ";"<< std::endl;
-		fileout << std::setprecision(16) << "aalpha0=     " << aalpha0        << ";"<< std::endl;
-		fileout << std::setprecision(16) << "aalpha1=     " << aalpha1        << ";"<< std::endl;
+		fileout << std::setprecision(16) << "bbeta=       " << bbeta         << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ttau=        " << ttau          << ";"<< std::endl;
+		fileout << std::setprecision(16) << "aalpha=      " << aalpha        << ";"<< std::endl;
+		fileout << std::setprecision(16) << "v=           " << v             << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ddelta=      " << ddelta        << ";"<< std::endl;
+		fileout << std::setprecision(16) << "pphi=        " << pphi          << ";"<< std::endl;
+		fileout << std::setprecision(16) << "MC=          " << MC            << ";"<< std::endl;
+		fileout << std::setprecision(16) << "rrhox=       " << rrhox         << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ppsi=        " << ppsi          << ";"<< std::endl;
+		fileout << std::setprecision(16) << "rrhoz=       " << rrhoz         << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ssigmaz=     " << ssigmaz       << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ssigmax_low= " << ssigmax_low   << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ssigmax_high=" << ssigmax_high  << ";"<< std::endl;
+		fileout << std::setprecision(16) << "ppsi_n=      " << ppsi_n        << ";"<< std::endl;
+		fileout << std::setprecision(16) << "aalpha0=     " << aalpha0       << ";"<< std::endl;
+		fileout << std::setprecision(16) << "aalpha1=     " << aalpha1       << ";"<< std::endl;
+		fileout << std::setprecision(16) << "eeta=        " << eeta          << ";"<< std::endl;
 		fileout.close();
 	};
 };
