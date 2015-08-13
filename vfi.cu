@@ -1,19 +1,19 @@
-#define nk           500
+#define nk           400
 #define nx           11
 #define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
-#define nK           30
-#define nq           150
-#define nmarkup      150
+#define nK           50
+#define nq           100
+#define nmarkup      100
 #define tauchenwidth 2.5
 #define tol          1e-5
 #define outertol     1e-5
-#define damp         0.5
-#define maxconsec    20
+#define damp         0.0
+#define maxconsec    30
 #define maxiter      2000
-#define SIMULPERIOD  1000
-#define burnin       100
+#define SIMULPERIOD  3000
+#define burnin       300
 #define nhousehold   30000
 #define kwidth       1.5
 
@@ -521,8 +521,8 @@ int main(int argc, char ** argv)
 	p.ssigmax_low  = 0.04;
 	p.ssigmax_high = 0.04*3;
 	p.ppsi_n       = 1;
-	p.aalpha0      = 1.0;
-	p.aalpha1      = 9.0;
+	p.aalpha0      = 0.95;
+	p.aalpha1      = 0.0;
 	p.eeta         = 0.0;
 	p.Pssigmax[0] = 0.95; p.Pssigmax[2] = 0.05;
 	p.Pssigmax[1] = 0.08; p.Pssigmax[3] = 0.92;
@@ -555,8 +555,8 @@ int main(int argc, char ** argv)
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
-	double maxK = 30.0;
-	double minK = 0.01;
+	double maxK = 12.0;
+	double minK = 0.1;
 	/* for (int i_k = 0; i_k < nk; i_k++) { */
 	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
 	/* }; */
@@ -610,10 +610,10 @@ int main(int argc, char ** argv)
 	cudavec<double> CDF_x_high(nx*nx,0);              pdf2cdf(h_PX_high_ptr,nx,CDF_x_high.hptr);         CDF_x_high.h2d();
 
 	// Create pricing grids
-	double minq = 0.9;
+	double minq = 0.8;
 	double maxq = 1.5;
 	double minmarkup = 1.0;
-	double maxmarkup = 1.2;
+	double maxmarkup = 1.3;
 	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
 	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
 
@@ -897,7 +897,7 @@ int main(int argc, char ** argv)
 				// find current variables
 				double q           = h_markup_grid[i_markup]*w;
 				int i_q            = fit2grid(q, nq, thrust::raw_pointer_cast(h_q_grid.data()));
-				double mmu = exp( (r.pphi_mmuC+r.pphi_mmuzind*zind_sim[t]+r.pphi_mmussigmaxind*ssigmaxind_sim[t]+r.pphi_mmussigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_mmuK+r.pphi_mmussigmaxindK*ssigmaxind_sim[t]+r.pphi_mmuzindK*zind_sim[t]+r.pphi_mmussigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) );
+				double mmu = exp( (r.pphi_mmuC+r.pphi_mmuzind*zind_sim[t]+r.pphi_mmussigmaxind*ssigmaxind_sim[t]+r.pphi_mmussigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_mmuK+r.pphi_mmussigmaxindK*ssigmaxind_sim[t]+r.pphi_mmuzindK*zind_sim[t]+r.pphi_mmussigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) + r.pphi_mmuq*log(q));
 				/* double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1); */
 
 				// compute profit from each hh
@@ -968,7 +968,7 @@ int main(int argc, char ** argv)
 			C_sim.hptr[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
 			int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
 			double ttheta = double(activecount)/double(nhousehold);
-			mmu_sim.hptr[t] = p.aalpha0*pow( 1.0+pow(ttheta,p.aalpha1) , -1.0/p.aalpha1);
+			mmu_sim.hptr[t] = p.aalpha0*pow( max(ttheta,1.0/double(nhousehold)) , -p.aalpha1);
 		};
 
 		// prepare regressors.
@@ -1049,7 +1049,7 @@ int main(int argc, char ** argv)
 		r.pphi_CssigmaxindzindK = (1.0-damp)*r.pphi_CssigmaxindzindK + damp*bbeta[7];
 		printf("Rsq_C = %.4f, log(C) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) \n",Rsq_C,r.pphi_CC,r.pphi_Cssigmaxind,r.pphi_Czind,r.pphi_Cssigmaxindzind,r.pphi_CK,r.pphi_CssigmaxindK,r.pphi_CzindK,r.pphi_CssigmaxindzindK);
 
-		double Rsq_mmu = levelOLS(logmmu.hptr,X,SIMULPERIOD-burnin,8,bbeta);
+		double Rsq_mmu = levelOLS(logmmu.hptr,X,SIMULPERIOD-burnin,9,bbeta);
 		r.pphi_mmuC               = (1.0-damp)*r.pphi_mmuC               + damp*bbeta[0];
 		r.pphi_mmussigmaxind      = (1.0-damp)*r.pphi_mmussigmaxind      + damp*bbeta[1];
 		r.pphi_mmuzind            = (1.0-damp)*r.pphi_mmuzind            + damp*bbeta[2];
@@ -1058,10 +1058,10 @@ int main(int argc, char ** argv)
 		r.pphi_mmussigmaxindK     = (1.0-damp)*r.pphi_mmussigmaxindK     + damp*bbeta[5];
 		r.pphi_mmuzindK           = (1.0-damp)*r.pphi_mmuzindK           + damp*bbeta[6];
 		r.pphi_mmussigmaxindzindK = (1.0-damp)*r.pphi_mmussigmaxindzindK + damp*bbeta[7];
-		/* r.pphi_mmuq               = (1.0-damp)*r.pphi_mmuq               + damp*bbeta[8]; */
+		r.pphi_mmuq               = (1.0-damp)*r.pphi_mmuq               + damp*bbeta[8];
 		printf("Rsq_mmu = %.4f, log(mmu) = (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) + (%.2f+%.2f*ssigmaxind_lag+%.2f*zind+%.2f*ssigmaxind_lag*zind) * log(K) + %.2f*log(q) \n",Rsq_mmu,r.pphi_mmuC,r.pphi_mmussigmaxind,r.pphi_mmuzind,r.pphi_mmussigmaxindzind,r.pphi_mmuK,r.pphi_mmussigmaxindK,r.pphi_mmuzindK,r.pphi_mmussigmaxindzindK,r.pphi_mmuq);
 
-		outer_Rsq =  min(min(Rsq_K,Rsq_q),min(Rsq_C,Rsq_mmu));
+		outer_Rsq =  min(min(Rsq_K,Rsq_q),Rsq_C);
 
 
 		// Stop Timer
@@ -1084,6 +1084,7 @@ int main(int argc, char ** argv)
 		r.savetofile("./results/aggrules.csv");
 		save_vec(h_K_grid,"./results/K_grid.csv");         // in #include "cuda_helpers.h"
 		save_vec(h_k_grid,"./results/k_grid.csv");         // in #include "cuda_helpers.h"
+		save_vec(h_q_grid,"./results/q_grid.csv");         // in #include "cuda_helpers.h"
 		save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h"
 		save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
 		save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
