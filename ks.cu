@@ -1,5 +1,5 @@
-#define nk           400
-#define nx           11
+#define nk           300
+#define nx           25
 #define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
@@ -9,12 +9,12 @@
 #define tauchenwidth 2.5
 #define tol          1e-5
 #define outertol     1e-5
-#define damp         0.5
+#define damp         0.2
 #define maxconsec    30
 #define maxiter      2000
-#define SIMULPERIOD  3000
-#define burnin       300
-#define nhousehold   30000
+#define SIMULPERIOD  1000
+#define burnin       100
+#define nhousehold   10000
 #define kwidth       1.5
 
 /* Includes, system */
@@ -503,7 +503,7 @@ int main(int argc, char ** argv)
 	};
 
 	// set device heap memeory size.
-	cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1e8*sizeof(double));
+	/* cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1e8*sizeof(double)); */
 
 	// set parameters
 	para p; // in #include "invpricemodel.h"
