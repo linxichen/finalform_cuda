@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iomanip>
 #include <string>
+#include "common.hpp"
 
 // Define an class that contains parameters and steady states
 struct para {
@@ -15,7 +16,7 @@ struct para {
 	double v;               //labor share
 	double ddelta;          //depreciation
 	double pphi;            //price of disinvestment relative to investment
-	double MC;              //How many units of consumption goods is needed for 1 inv good
+	double MC;              //# consumption needed for 1 inv good
 	double rrhox;           //persistence of idio TFP
 	double ppsi;            //quadratic cost of investment adjustment
 	double rrhoz;           //persistence of agg TFP
@@ -58,6 +59,29 @@ struct state {
 	// Data member
 	double k, z, y;
 	int i_s,i_q;
+};
+
+/// define exogenous stoch variable
+/// discretized into n state markov process. lives in type T (double, int)space
+/// either it's an AR1 process or ad-hoc specified markov var
+template<class T>
+struct exovar {
+	// data member
+	double val;
+	int    ind;
+	cudavec<double> mkv_PDF;
+	cudavec<double> mkv_CDF;
+	cudavec<T>      space;
+	cudavec<T>      logspace;
+	size_t  n;
+
+	// constructor, given AR(1) para
+	exovar(double rrho, double ssigma, size_t _n) {
+		n = _n;
+		mkv_PDF = cudavec<double>(n*n,0.0);
+		mkv_CDF = cudavec<double>(n*n,0.0);
+		space = cudavec<T>(n,0.0);
+	};
 };
 
 // Define struct that contains the coefficients on the agg. rules
@@ -147,7 +171,7 @@ struct aggrules {
 	};
 
 	__device__ __host__
-	double getmmu(int i_z, int i_ssigmax, double K) {
+	double getmmu(int i_z, int i_ssigmax, double K, double q) {
 		double intcpt
 			= pphi_mmuC
 			+ pphi_mmuzind           * i_z
@@ -158,13 +182,13 @@ struct aggrules {
 			+ pphi_mmussigmaxindK     * i_ssigmax
 			+ pphi_mmuzindK           * i_z
 			+ pphi_mmussigmaxindzindK * i_ssigmax * i_z;
-		return exp( intcpt + slope_K * log(K) );
+		return exp( intcpt + slope_K * log(K) + pphi_mmuq * log(q) );
 	};
 
 	// savetofile function
 	__host__
 		void savetofile(std::string filename) {
-			std::cout << "================================================================================" << std::endl;
+			std::cout << "===================================" << std::endl;
 			std::cout << "Saving to " << filename << std::endl;
 			std::ofstream fileout(filename.c_str(), std::ofstream::trunc);
 			fileout << std::setprecision(16) << pphi_KC << '\n';
@@ -205,13 +229,13 @@ struct aggrules {
 			fileout << std::setprecision(16) << pphi_mmuq << '\n';
 			fileout.close();
 			std::cout << "Done!" << std::endl;
-			std::cout << "================================================================================" << std::endl;
+			std::cout << "=======================================" << std::endl;
 		};
 
 	// load from function
 	__host__
 		void loadfromfile(std::string filename) {
-			std::cout << "================================================================================" << std::endl;
+			std::cout << "=======================================" << std::endl;
 			std::cout << "Loading to " << filename << std::endl;
 			std::ifstream filein(filename.c_str());
 			filein >> pphi_KC                    ;
@@ -253,7 +277,7 @@ struct aggrules {
 
 			filein.close();
 			std::cout << "Done!" << std::endl;
-			std::cout << "================================================================================" << std::endl;
+			std::cout << "=======================================" << std::endl;
 		};
 };
 

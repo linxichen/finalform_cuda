@@ -89,7 +89,7 @@ struct updateprofit
 		int i_x       = (i_s-i_ssigmax*nx*nz-i_z*nx)/(1);
 		double x       = x_grid[i_x];
 		double z       = z_grid[i_z];
-		double C = exp( (r.pphi_CC+r.pphi_Czind*i_z+r.pphi_Cssigmaxind*i_ssigmax+r.pphi_Cssigmaxindzind*i_ssigmax*i_z) + (r.pphi_CK+r.pphi_CssigmaxindK*i_ssigmax+r.pphi_CzindK*i_z+r.pphi_CssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double C = r.getC(i_z,i_ssigmax,K);
 		double w = p.ppsi_n*C;
 
 		// Find profit finally
@@ -150,9 +150,9 @@ struct updateU
 		double K = K_grid[i_K];
 		int i_ssigmax = i_s/(nx*nz);
 		int i_z       = (i_s-i_ssigmax*nx*nz)/(nx);
-		double C = exp( (r.pphi_CC+r.pphi_Czind*i_z+r.pphi_Cssigmaxind*i_ssigmax+r.pphi_Cssigmaxindzind*i_ssigmax*i_z) + (r.pphi_CK+r.pphi_CssigmaxindK*i_ssigmax+r.pphi_CzindK*i_z+r.pphi_CssigmaxindzindK*i_ssigmax*i_z) * log(K) );
-		double Kplus = exp( (r.pphi_KC+r.pphi_Kzind*i_z+r.pphi_Kssigmaxind*i_ssigmax+r.pphi_Kssigmaxindzind*i_ssigmax*i_z) + (r.pphi_KK+r.pphi_KssigmaxindK*i_ssigmax+r.pphi_KzindK*i_z+r.pphi_KssigmaxindzindK*i_ssigmax*i_z) * log(K) );
-		double qplus = exp( (r.pphi_qC+r.pphi_qzind*i_z+r.pphi_qssigmaxind*i_ssigmax+r.pphi_qssigmaxindzind*i_ssigmax*i_z) + (r.pphi_qK+r.pphi_qssigmaxindK*i_ssigmax+r.pphi_qzindK*i_z+r.pphi_qssigmaxindzindK*i_ssigmax*i_z) * log(K) );
+		double C = r.getC(i_z,i_ssigmax,K);
+		double Kplus = r.getKplus(i_z,i_ssigmax,K);
+		double qplus = r.getqplus(i_z,i_ssigmax,K);
 		double llambda = 1/C;
 		int i_Kplus = fit2grid(Kplus,nK,K_grid);
 		int i_qplus = fit2grid(qplus,nq,q_grid);
@@ -245,44 +245,52 @@ struct updateWV
 		double k       = k_grid[i_k];
 		double K       = K_grid[i_K];
 		double q       = q_grid[i_q];
-		double C = exp( (r.pphi_CC+r.pphi_Czind*i_z+r.pphi_Cssigmaxind*i_ssigmax+r.pphi_Cssigmaxindzind*i_ssigmax*i_z) + (r.pphi_CK+r.pphi_CssigmaxindK*i_ssigmax+r.pphi_CzindK*i_z+r.pphi_CssigmaxindzindK*i_ssigmax*i_z) * log(K) );
-		double Kplus = exp( (r.pphi_KC+r.pphi_Kzind*i_z+r.pphi_Kssigmaxind*i_ssigmax+r.pphi_Kssigmaxindzind*i_ssigmax*i_z) + (r.pphi_KK+r.pphi_KssigmaxindK*i_ssigmax+r.pphi_KzindK*i_z+r.pphi_KssigmaxindzindK*i_ssigmax*i_z) * log(K) );
-		double qplus = exp( (r.pphi_qC+r.pphi_qzind*i_z+r.pphi_qssigmaxind*i_ssigmax+r.pphi_qssigmaxindzind*i_ssigmax*i_z) + (r.pphi_qK+r.pphi_qssigmaxindK*i_ssigmax+r.pphi_qzindK*i_z+r.pphi_qssigmaxindzindK*i_ssigmax*i_z) * log(K) );
-		double mmu = exp( (r.pphi_mmuC+r.pphi_mmuzind*i_z+r.pphi_mmussigmaxind*i_ssigmax+r.pphi_mmussigmaxindzind*i_ssigmax*i_z) + (r.pphi_mmuK+r.pphi_mmussigmaxindK*i_ssigmax+r.pphi_mmuzindK*i_z+r.pphi_mmussigmaxindzindK*i_ssigmax*i_z) * log(K) + r.pphi_mmuq*log(q) );
+		double C     = r.getC(i_z,i_ssigmax,K);
+		double Kplus = r.getKplus(i_z,i_ssigmax,K);
+		double qplus = r.getqplus(i_z,i_ssigmax,K);
+		double mmu   = r.getmmu(i_z,i_ssigmax,K,q);
 		mmu = min(1.0,mmu);
-		/* double ttheta = exp( (r.pphi_tthetaC+r.pphi_tthetazind*i_z+r.pphi_tthetassigmaxind*i_ssigmax+r.pphi_tthetassigmaxindzind*i_ssigmax*i_z) + (r.pphi_tthetaK+r.pphi_tthetassigmaxindK*i_ssigmax+r.pphi_tthetazindK*i_z+r.pphi_tthetassigmaxindzindK*i_ssigmax*i_z) * log(K) + r.pphi_tthetaq*log(q) ); */
 
 		double llambda = 1/C;
-		/* double mmu = p.aalpha0*pow(ttheta,p.aalpha1); */
 		int i_Kplus = fit2grid(Kplus,nK,K_grid);
 		int i_qplus = fit2grid(qplus,nq,q_grid);
 
 		// find the indexes of (1-ddelta)*k
 		int noinvest_ind = fit2grid((1-p.ddelta)*k,nk,k_grid);
 		int i_left_noinv, i_right_noinv;
-		if (noinvest_ind == nk-1) { // (1-ddelta)k>=maxK, then should use K[nk-2] as left point to extrapolate
+		// (1-ddelta)k>=maxK, then should use K[nk-2] as left point
+		if (noinvest_ind == nk-1) {
 			i_left_noinv = nk-2;
 			i_right_noinv = nk-1;
 		} else {
 			i_left_noinv = noinvest_ind;
 			i_right_noinv = noinvest_ind+1;
 		};
-		double kplus_left_noinv  = k_grid[i_left_noinv];
-		double kplus_right_noinv = k_grid[i_right_noinv];
 
 		// find EV_noinvest
-		double EV_noinvest = linear_interp( (1-p.ddelta)*k, kplus_left_noinv, kplus_right_noinv, EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq], EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]);
-		/* double EV_noinvest = EV[noinvest_ind+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]; */
+		double kplus_left_noinv  = k_grid[i_left_noinv];
+		double kplus_right_noinv = k_grid[i_right_noinv];
+		double EV_noinvest = linear_interp(
+			(1-p.ddelta)*k,
+			kplus_left_noinv,
+			kplus_right_noinv,
+			EV[i_left_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq],
+			EV[i_right_noinv+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq]
+		);
 
 		// search through all positve investment level
 		double rhsmax = -999999999999999;
 		int koptind_active = 0;
 		for (int i_kplus = 0; i_kplus < nk; i_kplus++) {
-			double convexadj = p.eeta*(k_grid[i_kplus]-(1-p.ddelta)*k)*(k_grid[i_kplus]-(1-p.ddelta)*k)/k;
-			double effective_price = (k_grid[i_kplus]>=(1-p.ddelta)*k) ? q : p.pphi*q;
+			double inv = k_grid[i_kplus]-(1-p.ddelta)*k;
+			double convexadj = p.eeta*inv*inv/k;
+			double efftv_q = (inv>=0) ? q : p.pphi*q;
 			// compute kinda stupidly EV
 			double EV_inv = EV[i_kplus+i_Kplus*nk+i_qplus*nk*nK+i_s*nk*nK*nq];
-			double candidate = llambda*profit[i_k+i_K*nk+i_s*nk*nK] + mmu*( llambda*(-effective_price)*(k_grid[i_kplus]-(1-p.ddelta)*k) - llambda*convexadj + p.bbeta*EV_inv ) + (1-mmu)*p.bbeta*EV_noinvest;
+			double candidate
+				= llambda*profit[i_k+i_K*nk+i_s*nk*nK]
+				+ mmu*( llambda*(-efftv_q*inv - convexadj) + p.bbeta*EV_inv )
+				+ (1-mmu)*p.bbeta*EV_noinvest;
 			if (candidate > rhsmax) {
 				rhsmax         = candidate;
 				koptind_active = i_kplus;
@@ -372,7 +380,8 @@ struct profitfromhh {
 		int i_s  = xind + zind*nx + ssigmaxind*nx*nz;
 		int i_state = kind + Kind*nk + qind*nk*nK + i_s*nk*nK*nq;
 		if (matchshock[index] < mmu) {
-			profit_temp[i_house] = (q-w)*double(active[i_state])*(kopt[i_state]-(1-p.ddelta)*k_grid[kind])/nhousehold;
+			double inv = kopt[i_state]-(1-p.ddelta)*k_grid[kind];
+			profit_temp[i_house] = (q-w)*double(active[i_state])*inv/nhousehold;
 		} else {
 			profit_temp[i_house] = 0;
 		};
@@ -530,7 +539,6 @@ int main(int argc, char ** argv)
 	// Export parameters to MATLAB
 	p.exportmatlab("./MATLAB/vfi_para.m");
 
-
 	// Create all STATE, SHOCK grids here
 	h_vec_d h_k_grid(nk,0.0);
 	h_vec_d h_K_grid(nK,0.0);
@@ -556,6 +564,12 @@ int main(int argc, char ** argv)
 	h_vec_d h_kopt(nk*ns*nK*nq,0.0);
 	h_vec_i h_active(nk*ns*nK*nq,0);
 
+	// obtain host pointers
+	double* h_k_grid_ptr = thrust::raw_pointer_cast(h_k_grid.data());
+	double* h_K_grid_ptr = thrust::raw_pointer_cast(h_K_grid.data());
+	double* h_q_grid_ptr = thrust::raw_pointer_cast(h_q_grid.data());
+	double* h_markup_grid_ptr = thrust::raw_pointer_cast(h_markup_grid.data());
+
 	load_vec(h_V,"./results/Vgrid.csv"); // in #include "cuda_helpers.h"
 
 	// Create capital grid
@@ -564,15 +578,15 @@ int main(int argc, char ** argv)
 	/* for (int i_k = 0; i_k < nk; i_k++) { */
 	/* 	h_k_grid[i_k] = maxK*pow(1-p.ddelta,nk-1-i_k); */
 	/* }; */
-	linspace(minK,maxK,nk,thrust::raw_pointer_cast(h_k_grid.data())); // in #include "cuda_helpers.h" */
-	linspace(h_k_grid[0],h_k_grid[nk-1],nK,thrust::raw_pointer_cast(h_K_grid.data())); // in #include "cuda_helpers.h"
+	linspace(minK,maxK,nk,h_k_grid_ptr);
+	linspace(h_k_grid[0],h_k_grid[nk-1],nK,h_K_grid_ptr);
 
 	// Create TFP grids and transition matrix
 	h_ssigmax_grid[0] = p.ssigmax_low;
 	h_ssigmax_grid[1] = p.ssigmax_high;
 	double* h_logZ_ptr = thrust::raw_pointer_cast(h_logZ.data());
 	double* h_PZ_ptr   = thrust::raw_pointer_cast(  h_PZ.data());
-	/* tauchen(p.rrhoz, p.ssigmaz, h_logZ, h_PZ, tauchenwidth); // in #include "cuda_helpers.h" */
+	/* tauchen(p.rrhoz, p.ssigmaz, h_logZ, h_PZ, tauchenwidth); */
 	/* for (int i_z = 0; i_z < nz; i_z++) { */
 	/* 	h_z_grid[i_z] = exp(h_logZ[i_z]); */
 	/* }; */
@@ -584,8 +598,8 @@ int main(int argc, char ** argv)
 	double* h_logX_ptr    = thrust::raw_pointer_cast(h_logX   .data());
 	double* h_PX_low_ptr  = thrust::raw_pointer_cast(h_PX_low .data());
 	double* h_PX_high_ptr = thrust::raw_pointer_cast(h_PX_high.data());
-	tauchen(           p.rrhox, p.ssigmax_high, h_logX, h_PX_high, tauchenwidth); // in #include "cuda_helpers.h"
-	tauchen_givengrid( p.rrhox, p.ssigmax_low,  h_logX, h_PX_low,  tauchenwidth); // in #include "cuda_helpers.h"
+	tauchen(p.rrhox, p.ssigmax_high, h_logX, h_PX_high, tauchenwidth);
+	tauchen_givengrid(p.rrhox, p.ssigmax_low,  h_logX, h_PX_low, tauchenwidth);
 	for (int i_x = 0; i_x < nx; i_x++) {
 		h_x_grid[i_x] = exp(h_logX[i_x]);
 	};
@@ -600,39 +614,53 @@ int main(int argc, char ** argv)
 			int i_zplus       = (i_splus-i_ssigmaxplus*nx*nz)/(nx);
 			int i_xplus       = (i_splus-i_ssigmaxplus*nx*nz-i_zplus*nx)/(1);
 			if (i_ssigmaxplus==0) {
-				h_P[i_s+i_splus*ns] = h_PX_low[i_x+i_xplus*nx]*h_PZ[i_z+i_zplus*nz]* p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
+				h_P[i_s+i_splus*ns]
+					= h_PX_low[i_x+i_xplus*nx]
+					* h_PZ[i_z+i_zplus*nz]
+					* p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
 			} else {
-				h_P[i_s+i_splus*ns] = h_PX_high[i_x+i_xplus*nx]*h_PZ[i_z+i_zplus*nz]*p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
+				h_P[i_s+i_splus*ns]
+					= h_PX_high[i_x+i_xplus*nx]
+					* h_PZ[i_z+i_zplus*nz]
+					* p.Pssigmax[i_ssigmax+i_ssigmaxplus*nssigmax];
 			}
 		};
 	};
 
 	// find cdf on host then transfer to device
-	cudavec<double> CDF_z(nz*nz,0);                   pdf2cdf(h_PZ_ptr,nz,CDF_z.hptr);                   CDF_z.h2d();
-	cudavec<double> CDF_ssigmax(nssigmax*nssigmax,0); pdf2cdf(p.Pssigmax,nssigmax,CDF_ssigmax.hptr); CDF_ssigmax.h2d();
-	cudavec<double> CDF_x_low(nx*nx,0);               pdf2cdf(h_PX_low_ptr,nx,CDF_x_low.hptr);           CDF_x_low.h2d();
-	cudavec<double> CDF_x_high(nx*nx,0);              pdf2cdf(h_PX_high_ptr,nx,CDF_x_high.hptr);         CDF_x_high.h2d();
+	cudavec<double> CDF_z(       nz*nz,             0);
+	cudavec<double> CDF_ssigmax( nssigmax*nssigmax, 0);
+	cudavec<double> CDF_x_low(   nx*nx,             0);
+	cudavec<double> CDF_x_high(  nx*nx,             0);
+	pdf2cdf(h_PZ_ptr,      nz,       CDF_z.hptr);
+	pdf2cdf(p.Pssigmax,    nssigmax, CDF_ssigmax.hptr);
+	pdf2cdf(h_PX_low_ptr,  nx,       CDF_x_low.hptr);
+	pdf2cdf(h_PX_high_ptr, nx,       CDF_x_high.hptr);
+	CDF_z      .h2d();
+	CDF_ssigmax.h2d();
+	CDF_x_low  .h2d();
+	CDF_x_high .h2d();
 
 	// Create pricing grids
 	double minq = 0.8;
 	double maxq = 1.5;
 	double minmarkup = 1.0;
 	double maxmarkup = 1.3;
-	linspace(minq,maxq,nq,thrust::raw_pointer_cast(h_q_grid.data())); // in #include "cuda_helpers.h"
-	linspace(minmarkup,maxmarkup,nmarkup,thrust::raw_pointer_cast(h_markup_grid.data())); // in #include "cuda_helpers.h"
+	linspace(minq,maxq,nq,h_q_grid_ptr);
+	linspace(minmarkup,maxmarkup,nmarkup,h_markup_grid_ptr);
 
 	// At this point good idea to save all created grids
-	save_vec(h_K_grid,"./results/K_grid.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_k_grid,"./results/k_grid.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_q_grid,"./results/q_grid.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_markup_grid,"./results/markup_grid.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_x_grid,"./results/x_grid.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_z_grid,"./results/z_grid.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_ssigmax_grid,"./results/ssigmax_grid.csv"); // in #include "cuda_helpers.h"
-	save_vec(h_PZ,"./results/PZ.csv");                     // in #include "cuda_helpers.h"
-	save_vec(h_PX_low,"./results/PX_low.csv");             // in #include "cuda_helpers.h"
-	save_vec(h_PX_high,"./results/PX_high.csv");           // in #include "cuda_helpers.h"
-	save_vec(h_P,"./results/P.csv");                       // in #include "cuda_helpers.h"
+	save_vec(h_K_grid,"./results/K_grid.csv");
+	save_vec(h_k_grid,"./results/k_grid.csv");
+	save_vec(h_q_grid,"./results/q_grid.csv");
+	save_vec(h_markup_grid,"./results/markup_grid.csv");
+	save_vec(h_x_grid,"./results/x_grid.csv");
+	save_vec(h_z_grid,"./results/z_grid.csv");
+	save_vec(h_ssigmax_grid,"./results/ssigmax_grid.csv");
+	save_vec(h_PZ,"./results/PZ.csv");
+	save_vec(h_PX_low,"./results/PX_low.csv");
+	save_vec(h_PX_high,"./results/PX_high.csv");
+	save_vec(h_P,"./results/P.csv");
 
 	// set initial agg rules
 	aggrules r;
@@ -654,7 +682,7 @@ int main(int argc, char ** argv)
 	r.pphi_KzindK = 0; // w.r.t agg K
 	r.pphi_KssigmaxindzindK = 0; // w.r.t agg K
 
-	r.pphi_CC = log((maxq+minq)/(maxmarkup+minmarkup)/p.ppsi_n); // constant term
+	r.pphi_CC = log((maxq+minq)/(maxmarkup+minmarkup)/p.ppsi_n); //constant term
 	r.pphi_Czind = 0; // w.r.t agg TFP
 	r.pphi_Cssigmaxind = 0; // w.r.t uncertainty
 	r.pphi_Cssigmaxindzind = 0; // w.r.t uncertainty
@@ -739,27 +767,30 @@ int main(int argc, char ** argv)
 	curandDestroyGenerator(gen);
 
 	// simulate z and ssigmax index beforehand
-	cudavec<int>    zind_sim(SIMULPERIOD,(nz-1)/2);
-	cudavec<int>    ssigmaxind_sim(SIMULPERIOD,(nssigmax-1)/2);
-	cudavec<int>    xind_sim(nhousehold*SIMULPERIOD,(nx-1)/2);
-	cudavec<double> z_sim(SIMULPERIOD,h_z_grid[(nz-1)/2]);
-	cudavec<double> ssigmax_sim(SIMULPERIOD,h_ssigmax_grid[(nssigmax-1)/2]);
+	cudavec<int>    zind_sim(SIMULPERIOD,            (nz-1)/2);
+	cudavec<int>    ssigmaxind_sim(SIMULPERIOD,      (nssigmax-1)/2);
+	cudavec<int>    xind_sim(nhousehold*SIMULPERIOD, (nx-1)/2);
+	cudavec<double> z_sim(SIMULPERIOD,               h_z_grid[(nz-1)/2]);
+	cudavec<double> ssigmax_sim(SIMULPERIOD,         h_ssigmax_grid[(nssigmax-1)/2]);
+	/* markovsimul(SIMULPERIOD,CDF_z.hptr,nz,innov_z.hptr,(nz-1)/2,zind_sim.hptr); */
+	/* markovsimul(SIMULPERIOD,CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr,(nssigmax-1)/2,ssigmaxind_sim.hptr); */
 	for (int t = 1; t < SIMULPERIOD; t++) {
-		zind_sim.hptr[t]       = markovdiscrete(zind_sim.hptr[t-1],CDF_z.hptr,nz,innov_z.hptr[t]);
+		zind_sim.hptr[t] = markovdiscrete(zind_sim.hptr[t-1],CDF_z.hptr,nz,innov_z.hptr[t]);
 		ssigmaxind_sim.hptr[t] = markovdiscrete(ssigmaxind_sim.hptr[t-1],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
 		z_sim.hptr[t] = h_z_grid[zind_sim.hptr[t]];
 		ssigmax_sim.hptr[t] = h_ssigmax_grid[ssigmaxind_sim.hptr[t]];
 		for (int i_household = 0; i_household < nhousehold; i_household++) {
-			if (ssigmax_sim.hptr[t-1]==0) {
+			if (ssigmaxind_sim.hptr[t-1]==0) {
 				xind_sim[i_household+t*nhousehold] = markovdiscrete(xind_sim[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
 			};
-			if (ssigmax_sim.hptr[t-1]==1) {
+			if (ssigmaxind_sim.hptr[t-1]==1) {
 				xind_sim[i_household+t*nhousehold] = markovdiscrete(xind_sim[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
 			};
 		};
 	};
 	zind_sim.h2d();
 	ssigmaxind_sim.h2d();
+	xind_sim.h2d();
 
 	// Prepare for cuBLAS things
 	cublasHandle_t handle;
@@ -781,7 +812,6 @@ int main(int argc, char ** argv)
 	cudavec<double> mmu_sim(SIMULPERIOD,0.0);
 	k_sim.h2d();
 	kind_sim.h2d();
-	xind_sim.h2d();
 
 	double outer_Rsq=0.0;
 	while (outer_Rsq < 0.85) {
@@ -895,27 +925,29 @@ int main(int argc, char ** argv)
 		// simulation given policies
 		for (unsigned int t = 0; t < SIMULPERIOD; t++) {
 			// find aggregate K from distribution of k
-			K_sim[t] =  thrust::reduce(k_sim.dvec.begin()+t*nhousehold, k_sim.dvec.begin()+nhousehold+t*nhousehold, (double) 0, thrust::plus<double>())/double(nhousehold);
-			Kind_sim[t] = fit2grid(K_sim[t],nK,thrust::raw_pointer_cast(h_K_grid.data()));
+			double temp_K =
+				thrust::reduce(
+				k_sim.dvec.begin()+t*nhousehold,
+				k_sim.dvec.begin()+t*nhousehold+nhousehold,
+				(double) 0,
+				thrust::plus<double>()
+				);
+			K_sim[t] = temp_K/double(nhousehold);
+			Kind_sim[t] = fit2grid(K_sim[t],nK,h_K_grid_ptr);
+			int ssigmaxind_lag  = (t==0) ? 0 : ssigmaxind_sim[t-1];
 
 			// find current wage from aggregate things
-			double C = exp( (r.pphi_CC+r.pphi_Czind*zind_sim[t]+r.pphi_Cssigmaxind*ssigmaxind_sim[t]+r.pphi_Cssigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_CK+r.pphi_CssigmaxindK*ssigmaxind_sim[t]+r.pphi_CzindK*zind_sim[t]+r.pphi_CssigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) );
+			double C = r.getC(zind_sim[t],ssigmaxind_lag,K_sim[t]);
 			double w = p.ppsi_n*C;
-			/* double* matchshock_ptr = thrust::raw_pointer_cast(innov_match.dvec.data()+t*nhousehold); */
-			/* int* kindlist_ptr      = thrust::raw_pointer_cast(kind_sim.dvec.data()+t*nhousehold); */
-			/* double* klist_ptr      = thrust::raw_pointer_cast(k_sim.dvec.data()+t*nhousehold); */
-			/* int* xindlist_ptr      = thrust::raw_pointer_cast(xind_sim.dvec.data()+t*nhousehold); */
-			int ssigmaxind_lag     = (t==0) ? 0 : ssigmaxind_sim[t-1];
 
 			// given markup find optimal price for monopolist
 			double profitmax = -9999999;
 			int i_qmax = 0;
 			for (unsigned int i_markup = 0; i_markup < nmarkup; i_markup++) {
 				// find current variables
-				double q           = h_markup_grid[i_markup]*w;
-				int i_q            = fit2grid(q, nq, thrust::raw_pointer_cast(h_q_grid.data()));
-				double mmu = exp( (r.pphi_mmuC+r.pphi_mmuzind*zind_sim[t]+r.pphi_mmussigmaxind*ssigmaxind_sim[t]+r.pphi_mmussigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_mmuK+r.pphi_mmussigmaxindK*ssigmaxind_sim[t]+r.pphi_mmuzindK*zind_sim[t]+r.pphi_mmussigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) + r.pphi_mmuq*log(q));
-				/* double mmu    = p.aalpha0*pow(ttheta_temp,p.aalpha1); */
+				double q   = h_markup_grid[i_markup]*w;
+				int i_q    = fit2grid(q, nq, h_q_grid_ptr);
+				double mmu = r.getmmu(zind_sim[t], ssigmaxind_lag, K_sim[t], q);
 
 				// compute profit from each hh
 				thrust::for_each(
@@ -952,8 +984,7 @@ int main(int argc, char ** argv)
 			q_sim[t] = qmax;
 
 			// evolution under qmax!
-			double mmu_temp = exp( (r.pphi_mmuC+r.pphi_mmuzind*zind_sim[t]+r.pphi_mmussigmaxind*ssigmaxind_sim[t]+r.pphi_mmussigmaxindzind*ssigmaxind_sim[t]*zind_sim[t]) + (r.pphi_mmuK+r.pphi_mmussigmaxindK*ssigmaxind_sim[t]+r.pphi_mmuzindK*zind_sim[t]+r.pphi_mmussigmaxindzindK*ssigmaxind_sim[t]*zind_sim[t]) * log(K_sim[t]) + r.pphi_mmuq*log(qmax) ) ;
-			/* double mmu_temp    = p.aalpha0*pow(ttheta_temp,p.aalpha1); */
+			double mmu = r.getmmu(zind_sim[t],ssigmaxind_lag,K_sim[t],qmax);
 			thrust::for_each(
 				begin_hh+t*nhousehold,
 				end_hh+t*nhousehold,
@@ -966,7 +997,7 @@ int main(int argc, char ** argv)
 					d_x_grid_ptr,
 					qmax,
 					w,
-					mmu_temp,
+					mmu,
 					innov_match.dptr,
 					Kind_sim[t],
 					i_qmax,
@@ -1080,7 +1111,6 @@ int main(int argc, char ** argv)
 
 		outer_Rsq =  min(min(Rsq_K,Rsq_q),Rsq_C);
 
-
 		// Stop Timer
 		cudaEventRecord(stop,NULL);
 		cudaEventSynchronize(stop);
@@ -1106,6 +1136,275 @@ int main(int argc, char ** argv)
 		std::cout << "Policy functions output completed." << std::endl;
 	}
 
+	// produce tranditional IRF
+	// (REF path)simulate z and ssigmax index beforehand
+	int irfperiods = 40;
+	cudavec<int>    zind_sim_ref(irfperiods,            0);
+	cudavec<int>    ssigmaxind_sim_ref(irfperiods,      0);
+	cudavec<int>    xind_sim_ref(nhousehold*irfperiods, (nx-1)/2);
+	cudavec<double> z_sim_ref(irfperiods,               h_z_grid[0]);
+	cudavec<double> ssigmax_sim_ref(irfperiods,         h_ssigmax_grid[0]);
+	for (int t = 1; t < irfperiods; t++) {
+		for (int i_household = 0; i_household < nhousehold; i_household++) {
+			if (ssigmaxind_sim_ref.hptr[t-1]==0) {
+				xind_sim_ref[i_household+t*nhousehold] = markovdiscrete(xind_sim_ref[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+			};
+			if (ssigmaxind_sim_ref.hptr[t-1]==1) {
+				xind_sim_ref[i_household+t*nhousehold] = markovdiscrete(xind_sim_ref[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+			};
+		};
+	};
+	zind_sim_ref.h2d();
+	ssigmaxind_sim_ref.h2d();
+	xind_sim_ref.h2d();
+
+	// intialize simulaiton records
+	cudavec<double> K_sim_ref(irfperiods,K_sim[SIMULPERIOD-1]);
+	cudavec<int>    Kind_sim_ref(irfperiods,Kind_sim[SIMULPERIOD-1]);
+	cudavec<double> k_sim_ref(nhousehold*irfperiods,h_k_grid[(nk-1)/2]);
+	cudavec<int>    kind_sim_ref(nhousehold*irfperiods,(nk-1)/2);
+	for (int i_house = 0; i_house < nhousehold; i_house++) {
+		k_sim_ref[i_house] = k_sim[i_house+(SIMULPERIOD-1)*nhousehold];
+		kind_sim_ref[i_house] = kind_sim[i_house+(SIMULPERIOD-1)*nhousehold];
+	};
+	cudavec<double> profit_temp_ref(nhousehold,0.0);
+	cudavec<int>    qind_sim_ref(irfperiods,(nq-1)/2);
+	cudavec<double> q_sim_ref(irfperiods,h_q_grid[(nq-1)/2]);
+	cudavec<double> C_sim_ref(irfperiods,0.0);
+	cudavec<double> mmu_sim_ref(irfperiods,0.0);
+	k_sim_ref.h2d();
+	kind_sim_ref.h2d();
+	xind_sim_ref.h2d();
+	for (unsigned int t = 0; t < irfperiods; t++) {
+		// find aggregate K from distribution of k
+		double temp_K =
+			thrust::reduce(
+			k_sim_ref.dvec.begin()+t*nhousehold,
+			k_sim_ref.dvec.begin()+t*nhousehold+nhousehold,
+			(double) 0,
+			thrust::plus<double>()
+			);
+		K_sim_ref[t] = temp_K/double(nhousehold);
+		Kind_sim_ref[t] = fit2grid(K_sim_ref[t],nK,h_K_grid_ptr);
+		int ssigmaxind_lag  = (t==0) ? 0 : ssigmaxind_sim_ref[t-1];
+
+		// find current wage from aggregate things
+		double C = r.getC(zind_sim_ref[t],ssigmaxind_lag,K_sim_ref[t]);
+		double w = p.ppsi_n*C;
+
+		// given markup find optimal price for monopolist
+		double profitmax = -9999999;
+		int i_qmax = 0;
+		for (unsigned int i_markup = 0; i_markup < nmarkup; i_markup++) {
+			// find current variables
+			double q   = h_markup_grid[i_markup]*w;
+			int i_q    = fit2grid(q, nq, h_q_grid_ptr);
+			double mmu = r.getmmu(zind_sim_ref[t], ssigmaxind_lag, K_sim_ref[t], q);
+
+			// compute profit from each hh
+			thrust::for_each(
+				begin_hh+t*nhousehold,
+				end_hh+t*nhousehold,
+				profitfromhh(
+					d_kopt_ptr,
+					d_active_ptr,
+					d_k_grid_ptr,
+					q,
+					w,
+					mmu,
+					innov_match.dptr,
+					Kind_sim_ref[t],
+					i_q,
+					zind_sim_ref.hvec[t],
+					ssigmaxind_lag,
+					kind_sim_ref.dptr,
+					xind_sim_ref.dptr,
+					p,
+					profit_temp.dptr
+				)
+			);
+
+			// sum over profit to find total profit
+			double totprofit = thrust::reduce(profit_temp.dvec.begin(), profit_temp.dvec.end(), (double) 0, thrust::plus<double>());
+			if (totprofit > profitmax) {
+				profitmax = totprofit;
+				i_qmax    = i_q;
+			};
+		}
+		qind_sim_ref[t] = i_qmax;
+		double qmax = h_q_grid[i_qmax];
+		q_sim_ref[t] = qmax;
+
+		// evolution under qmax!
+		double mmu = r.getmmu(zind_sim_ref[t],ssigmaxind_lag,K_sim_ref[t],qmax);
+		thrust::for_each(
+			begin_hh+t*nhousehold,
+			end_hh+t*nhousehold,
+			simulateforward(
+				d_kopt_ptr,
+				d_koptind_ptr,
+				d_active_ptr,
+				d_k_grid_ptr,
+				d_z_grid_ptr,
+				d_x_grid_ptr,
+				qmax,
+				w,
+				mmu,
+				innov_match.dptr,
+				Kind_sim_ref[t],
+				i_qmax,
+				zind_sim_ref.hvec[t],
+				ssigmaxind_lag,
+				kind_sim_ref.dptr,
+				k_sim_ref.dptr,
+				xind_sim_ref.dptr,
+				clist.dptr,
+				activelist.dptr,
+				p
+			)
+		);
+
+		// find aggregate C and active ttheta
+		C_sim_ref.hptr[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
+		int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
+		double ttheta = double(activecount)/double(nhousehold);
+		mmu_sim_ref.hptr[t] = p.aalpha0*pow( max(ttheta,1.0/double(nhousehold)) , -p.aalpha1);
+	}
+
+	// (IRF path) simulate z and ssigmax index beforehand
+	cudavec<int>    zind_sim_irf(irfperiods,            0);
+	cudavec<int>    ssigmaxind_sim_irf(irfperiods,      0);
+	ssigmaxind_sim[0] = 0;
+	cudavec<int>    xind_sim_irf(nhousehold*irfperiods, (nx-1)/2);
+	cudavec<double> z_sim_irf(irfperiods,               h_z_grid[0]);
+	cudavec<double> ssigmax_sim_irf(irfperiods,         h_ssigmax_grid[0]);
+	ssigmax_sim[0] = h_ssigmax_grid[1];
+	for (int t = 1; t < irfperiods; t++) {
+		for (int i_household = 0; i_household < nhousehold; i_household++) {
+			if (ssigmaxind_sim_irf.hptr[t-1]==0) {
+				xind_sim_irf[i_household+t*nhousehold] = markovdiscrete(xind_sim_irf[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+			};
+			if (ssigmaxind_sim_irf.hptr[t-1]==1) {
+				xind_sim_irf[i_household+t*nhousehold] = markovdiscrete(xind_sim_irf[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+			};
+		};
+	};
+	zind_sim_irf.h2d();
+	ssigmaxind_sim_irf.h2d();
+	xind_sim_irf.h2d();
+
+	// intialize simulaiton records
+	cudavec<double> K_sim_irf(irfperiods,K_sim[SIMULPERIOD-1]);
+	cudavec<int>    Kind_sim_irf(irfperiods,Kind_sim[SIMULPERIOD-1]);
+	cudavec<double> k_sim_irf(nhousehold*irfperiods,h_k_grid[(nk-1)/2]);
+	cudavec<int>    kind_sim_irf(nhousehold*irfperiods,(nk-1)/2);
+	for (int i_house = 0; i_house < nhousehold; i_house++) {
+		k_sim_irf[i_house] = k_sim[i_house+(SIMULPERIOD-1)*nhousehold];
+		kind_sim_irf[i_house] = kind_sim[i_house+(SIMULPERIOD-1)*nhousehold];
+	};
+	cudavec<double> profit_temp_irf(nhousehold,0.0);
+	cudavec<int>    qind_sim_irf(irfperiods,(nq-1)/2);
+	cudavec<double> q_sim_irf(irfperiods,h_q_grid[(nq-1)/2]);
+	cudavec<double> C_sim_irf(irfperiods,0.0);
+	cudavec<double> mmu_sim_irf(irfperiods,0.0);
+	k_sim_irf.h2d();
+	kind_sim_irf.h2d();
+	xind_sim_irf.h2d();
+	for (unsigned int t = 0; t < irfperiods; t++) {
+		// find aggregate K from distribution of k
+		double temp_K =
+			thrust::reduce(
+			k_sim_irf.dvec.begin()+t*nhousehold,
+			k_sim_irf.dvec.begin()+t*nhousehold+nhousehold,
+			(double) 0,
+			thrust::plus<double>()
+			);
+		K_sim_irf[t] = temp_K/double(nhousehold);
+		Kind_sim_irf[t] = fit2grid(K_sim_irf[t],nK,h_K_grid_ptr);
+		int ssigmaxind_lag  = (t==0) ? 0 : ssigmaxind_sim_irf[t-1];
+
+		// find current wage from aggregate things
+		double C = r.getC(zind_sim_irf[t],ssigmaxind_lag,K_sim_irf[t]);
+		double w = p.ppsi_n*C;
+
+		// given markup find optimal price for monopolist
+		double profitmax = -9999999;
+		int i_qmax = 0;
+		for (unsigned int i_markup = 0; i_markup < nmarkup; i_markup++) {
+			// find current variables
+			double q   = h_markup_grid[i_markup]*w;
+			int i_q    = fit2grid(q, nq, h_q_grid_ptr);
+			double mmu = r.getmmu(zind_sim_irf[t], ssigmaxind_lag, K_sim_irf[t], q);
+
+			// compute profit from each hh
+			thrust::for_each(
+				begin_hh+t*nhousehold,
+				end_hh+t*nhousehold,
+				profitfromhh(
+					d_kopt_ptr,
+					d_active_ptr,
+					d_k_grid_ptr,
+					q,
+					w,
+					mmu,
+					innov_match.dptr,
+					Kind_sim_irf[t],
+					i_q,
+					zind_sim_irf.hvec[t],
+					ssigmaxind_lag,
+					kind_sim_irf.dptr,
+					xind_sim_irf.dptr,
+					p,
+					profit_temp.dptr
+				)
+			);
+
+			// sum over profit to find total profit
+			double totprofit = thrust::reduce(profit_temp.dvec.begin(), profit_temp.dvec.end(), (double) 0, thrust::plus<double>());
+			if (totprofit > profitmax) {
+				profitmax = totprofit;
+				i_qmax    = i_q;
+			};
+		}
+		qind_sim_irf[t] = i_qmax;
+		double qmax = h_q_grid[i_qmax];
+		q_sim_irf[t] = qmax;
+
+		// evolution under qmax!
+		double mmu = r.getmmu(zind_sim_irf[t],ssigmaxind_lag,K_sim_irf[t],qmax);
+		thrust::for_each(
+			begin_hh+t*nhousehold,
+			end_hh+t*nhousehold,
+			simulateforward(
+				d_kopt_ptr,
+				d_koptind_ptr,
+				d_active_ptr,
+				d_k_grid_ptr,
+				d_z_grid_ptr,
+				d_x_grid_ptr,
+				qmax,
+				w,
+				mmu,
+				innov_match.dptr,
+				Kind_sim_irf[t],
+				i_qmax,
+				zind_sim_irf.hvec[t],
+				ssigmaxind_lag,
+				kind_sim_irf.dptr,
+				k_sim_irf.dptr,
+				xind_sim_irf.dptr,
+				clist.dptr,
+				activelist.dptr,
+				p
+			)
+		);
+
+		// find aggregate C and active ttheta
+		C_sim_irf.hptr[t]        = thrust::reduce(clist.dvec.begin(), clist.dvec.end(), (double) 0, thrust::plus<double>())/double(nhousehold);
+		int activecount = thrust::reduce(activelist.dvec.begin(), activelist.dvec.end(), (int) 0, thrust::plus<int>());
+		double ttheta = double(activecount)/double(nhousehold);
+		mmu_sim_irf.hptr[t] = p.aalpha0*pow( max(ttheta,1.0/double(nhousehold)) , -p.aalpha1);
+	}
 
 	// to be safe destroy cuBLAS handle
 	cublasDestroy(handle);
