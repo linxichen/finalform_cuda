@@ -1,11 +1,11 @@
-#define nk           300
-#define nx           25
+#define nk           250
+#define nx           13
 #define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
-#define nK           50
-#define nq           100
-#define nmarkup      100
+#define nK           30
+#define nq           75
+#define nmarkup      75
 #define tauchenwidth 2.5
 #define tol          1e-5
 #define outertol     1e-5
@@ -1405,6 +1405,26 @@ int main(int argc, char ** argv)
 		double ttheta = double(activecount)/double(nhousehold);
 		mmu_sim_irf.hptr[t] = p.aalpha0*pow( max(ttheta,1.0/double(nhousehold)) , -p.aalpha1);
 	}
+
+	// save irf results to be analyze in MATLAB
+	save_vec(K_sim_irf,    "./results/K_sim_irf.csv");
+	save_vec(Kind_sim_irf, "./results/Kind_sim_irf.csv");
+	save_vec(kind_sim_irf, "./results/kind_sim_irf.csv");
+	save_vec(k_sim_irf,    "./results/k_sim_irf.csv");
+	save_vec(qind_sim_irf, "./results/qind_sim_irf.csv");
+	save_vec(q_sim_irf,    "./results/q_sim_irf.csv");
+	save_vec(C_sim_irf,    "./results/C_sim_irf.csv");
+	save_vec(mmu_sim_irf,  "./results/mmu_sim_irf.csv");
+
+	// save ref results
+	save_vec(K_sim_ref,    "./results/K_sim_ref.csv");
+	save_vec(Kind_sim_ref, "./results/Kind_sim_ref.csv");
+	save_vec(kind_sim_ref, "./results/kind_sim_ref.csv");
+	save_vec(k_sim_ref,    "./results/k_sim_ref.csv");
+	save_vec(qind_sim_ref, "./results/qind_sim_ref.csv");
+	save_vec(q_sim_ref,    "./results/q_sim_ref.csv");
+	save_vec(C_sim_ref,    "./results/C_sim_ref.csv");
+	save_vec(mmu_sim_ref,  "./results/mmu_sim_ref.csv");
 
 	// to be safe destroy cuBLAS handle
 	cublasDestroy(handle);
