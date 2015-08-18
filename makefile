@@ -48,7 +48,7 @@ all : veryclean $(EXEC)
 
 # Link objects from CUDA and C++ codes
 $(EXEC) : ks_dlink.o ks.o $(LDIR)/libcudatools.a
-	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDLIBS)
+	$(NVCC) $^ -o $@ $(NVCCFLAGS) $(LDLIBS)
 
 #Prepare for host linker
 ks_dlink.o : ks.o
