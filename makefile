@@ -5,48 +5,58 @@
 # $< = only the first dependency
 
 # Paths for includes I, and libraries L
-ICUDA = /usr/local/cuda-7.0/include
-LCUDA = /usr/local/cuda-7.0/lib64
+ICUDA     = /usr/local/cuda-7.0/include
 ICUDA_MAC = /Developer/NVIDIA/CUDA-7.0/include
+ICPP_MAC  = /usr/local/include
+LCUDA     = /usr/local/cuda-7.0/lib64
 LCUDA_MAC = /Developer/NVIDIA/CUDA-7.0/lib
-ICPP_MAC = /usr/local/include
-LCPP_MAC = /usr/local/lib
+LCPP_MAC  = /usr/local/lib
 
 SDIR = .
 IDIR = ./cudatools/include
 LDIR = ./cudatools/lib
 
+INCL+= -I$(ICUDA)
+INCL+= -I$(ICUDA_MAC)
+INCL+= -I$(ICPP_MAC)
+INCL+= -I$(IDIR)
+
 # Compiler for CUDA
 NVCC = nvcc
 
 # CUDA compiling options
-NVCCFLAGS = -v -arch sm_30 #-use_fast_math
+NVCCFLAGS  = -O2 -lineinfo -g -arch sm_30 -std=c++11
 
 # Compiler for C code
 CXX = g++
 
 # Standard optimization flags to C++ compiler
-CXXFLAGS = -O2 -std=c++11 -I$(ICUDA) -I$(ICUDA_MAC) -I$(ICPP_MAC) -I$(IDIR)
+CXXFLAGS = -O2 -Wall -Wextra -pedantic-errors -O2 -std=c++11
 
 # Add CUDA libraries to C++ compiler linking process
-LDLIBS += -lstdc++ -lcublas -lcurand -lcudart -lcudadevrt -larmadillo -lopenblas -llapack -larmadillo -lcudatools -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC) -L$(LDIR)
+LDLIBS += -lcublas
+LDLIBS += -lcurand
+LDLIBS += -lcudart -lcudadevrt
+LDLIBS += -larmadillo -lopenblas -llapack
+LDLIBS += -lcudatools
+LDLIBS += -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC) -L$(LDIR)
 
 # List Executables and Objects
-EXEC = vfi
+EXEC = ks
 
-all : $(EXEC) runvfi
+all : veryclean $(EXEC)
 
 # Link objects from CUDA and C++ codes
-$(EXEC) : vfi_dlink.o vfi.o $(LDIR)/libcudatools.a
-	$(CXX) $^ -o $@ $(CXXFLAGS) $(LDLIBS)
+$(EXEC) : ks_dlink.o ks.o $(LDIR)/libcudatools.a
+	$(NVCC) $^ -o $@ $(NVCCFLAGS) $(LDLIBS)
 
 #Prepare for host linker
-vfi_dlink.o : vfi.o
-	$(NVCC) -dlink  $^ -o $@ $(NVCCFLAGS) $(LDLIBS)
+ks_dlink.o : ks.o
+	$(NVCC) -dlink $^ -o $@ $(NVCCFLAGS) $(LDLIBS)
 
 # Compile CUDA code
-vfi.o : vfi.cu
-	$(NVCC) $(NVCCFLAGS) $(CXXFLAGS)  -dc $^ -o $@ $(LDLIBS)
+ks.o : ks.cu
+	$(NVCC) $(NVCCFLAGS) $(INCL) -dc $^ -o $@ $(LDLIBS)
 
 clean :
 	rm -f *.o
@@ -57,5 +67,5 @@ veryclean :
 	rm -f core core.*
 	rm -f $(EXEC)
 
-runvfi : vfi
-	./vfi
+run : ks
+	./ks
