@@ -3,9 +3,9 @@
 #define nz           2
 #define nssigmax     2
 #define ns           nx*nz*nssigmax
-#define nK           40
-#define nq           75
-#define nmarkup      75
+#define nK           30
+#define nq           65
+#define nmarkup      65
 #define tauchenwidth 2.5
 #define tol          1e-5
 #define outertol     1e-5
@@ -817,7 +817,7 @@ int main(int argc, char ** argv)
 	kind_sim.h2d();
 
 	double outer_Rsq=0.0;
-	while (outer_Rsq < 0.9) {
+	while (outer_Rsq < 0.8) {
 
 		// Create Timer
 		cudaEvent_t start, stop;
@@ -1139,19 +1139,21 @@ int main(int argc, char ** argv)
 		h_profit  = d_profit;
 
 		r.savetofile("./results/aggrules.csv");
-		save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h"
-		save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h"
-		save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h"
-		save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h"
+		/* save_vec(h_V,"./results/Vgrid.csv");               // in #include "cuda_helpers.h" */
+		/* save_vec(h_active,"./results/active.csv");         // in #include "cuda_helpers.h" */
+		/* save_vec(h_koptind,"./results/koptind.csv");       // in #include "cuda_helpers.h" */
+		/* save_vec(h_kopt,"./results/kopt.csv");             // in #include "cuda_helpers.h" */
 		std::cout << "Policy functions output completed." << std::endl;
 	}
 
 	///------------------------------------------------------------
 	/// General IRF Creation
 	///------------------------------------------------------------
-	// (REF path) initialze
 	int irfperiods = 40;
 	int nworlds    = 1000;
+
+
+	// (REF path) initialze
 	cudavec<int>    zind_sim_ref(nworlds*irfperiods,            1);
 	cudavec<int>    ssigmaxind_sim_ref(nworlds*irfperiods,      0);
 	cudavec<int>    xind_sim_ref(nhousehold*irfperiods, (nx-1)/2);
@@ -1180,21 +1182,38 @@ int main(int argc, char ** argv)
 			k_sim_ref[i_hh+0*nhousehold]    = k_sim[i_hh+i_backward*nhousehold];
 		};
 
+		// generate innovation terms
+		cudavec<double> eps_z(irfperiods);
+		cudavec<double> eps_ssigmax(irfperiods);
+		cudavec<double> eps_x(nhousehold*irfperiods);
+		cudavec<double> eps_match(nhousehold*irfperiods);
+		curandGenerator_t gen;
+		curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
+		curandSetPseudoRandomGeneratorSeed(gen, int64_t(709394+i_world));
+		curandGenerateUniformDouble(gen, eps_z.dptr,       irfperiods);
+		curandGenerateUniformDouble(gen, eps_ssigmax.dptr, irfperiods);
+		curandGenerateUniformDouble(gen, eps_x.dptr,       nhousehold*irfperiods);
+		curandGenerateUniformDouble(gen, eps_match.dptr,   nhousehold*irfperiods);
+		eps_z.d2h();
+		eps_ssigmax.d2h();
+		eps_x.d2h();
+		curandDestroyGenerator(gen);
+
 		// simulate z and ssigmax and x for each world
 		for (int t = 1; t < irfperiods; t++) {
 			zind_sim_ref.hptr[i_world+t*nworlds] =
-				markovdiscrete(zind_sim_ref.hptr[i_world+(t-1)*nworlds],CDF_z.hptr,nz,innov_z.hptr[t]);
+				markovdiscrete(zind_sim_ref.hptr[i_world+(t-1)*nworlds],CDF_z.hptr,nz,eps_z.hptr[t]);
 			ssigmaxind_sim_ref.hptr[i_world+t*nworlds] =
-				markovdiscrete(ssigmaxind_sim_ref.hptr[i_world+(t-1)*nworlds],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
+				markovdiscrete(ssigmaxind_sim_ref.hptr[i_world+(t-1)*nworlds],CDF_ssigmax.hptr,nssigmax,eps_ssigmax.hptr[t]);
 			z_sim_ref.hptr[t] = h_z_grid[zind_sim_ref.hptr[t]];
 			ssigmax_sim_ref.hptr[t] = h_ssigmax_grid[ssigmaxind_sim_ref.hptr[t]];
 			for (int i_household = 0; i_household < nhousehold; i_household++) {
 				if (ssigmaxind_sim_ref.hptr[t-1]==0) {
-					xind_sim_ref[i_household+t*nhousehold] = markovdiscrete(xind_sim_ref[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+					xind_sim_ref[i_household+t*nhousehold] = markovdiscrete(xind_sim_ref[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,eps_x.hptr[i_household+t*nhousehold]);
 				};
 				if (ssigmaxind_sim_ref.hptr[t-1]==1) {
 					xind_sim_ref[i_household+t*nhousehold] =
-						markovdiscrete(xind_sim_ref[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+						markovdiscrete(xind_sim_ref[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,eps_x.hptr[i_household+t*nhousehold]);
 				};
 			};
 		};
@@ -1246,7 +1265,7 @@ int main(int argc, char ** argv)
 							q,
 							w,
 							mmu,
-							innov_match.dptr,
+							eps_match.dptr,
 							Kind_sim_ref[i_world+t*nworlds],
 							i_q,
 							zind_sim_ref.hvec[i_world+t*nworlds],
@@ -1285,7 +1304,7 @@ int main(int argc, char ** argv)
 						qmax,
 						w,
 						mmu,
-						innov_match.dptr,
+						eps_match.dptr,
 						Kind_sim_ref[i_world+t*nworlds],
 						i_qmax,
 						zind_sim_ref.hvec[i_world+t*nworlds],
@@ -1341,21 +1360,38 @@ int main(int argc, char ** argv)
 			k_sim_irf[i_hh+0*nhousehold]    = k_sim[i_hh+i_backward*nhousehold];
 		};
 
+		// generate innovation terms
+		cudavec<double> eps_z(irfperiods);
+		cudavec<double> eps_ssigmax(irfperiods);
+		cudavec<double> eps_x(nhousehold*irfperiods);
+		cudavec<double> eps_match(nhousehold*irfperiods);
+		curandGenerator_t gen;
+		curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT);
+		curandSetPseudoRandomGeneratorSeed(gen, int64_t(709394+i_world));
+		curandGenerateUniformDouble(gen, eps_z.dptr,       irfperiods);
+		curandGenerateUniformDouble(gen, eps_ssigmax.dptr, irfperiods);
+		curandGenerateUniformDouble(gen, eps_x.dptr,       nhousehold*irfperiods);
+		curandGenerateUniformDouble(gen, eps_match.dptr,   nhousehold*irfperiods);
+		eps_z.d2h();
+		eps_ssigmax.d2h();
+		eps_x.d2h();
+		curandDestroyGenerator(gen);
+
 		// simulate z and ssigmax and x for each world
 		for (int t = 1; t < irfperiods; t++) {
 			zind_sim_irf.hptr[i_world+t*nworlds] =
-				markovdiscrete(zind_sim_irf.hptr[i_world+(t-1)*nworlds],CDF_z.hptr,nz,innov_z.hptr[t]);
+				markovdiscrete(zind_sim_irf.hptr[i_world+(t-1)*nworlds],CDF_z.hptr,nz,eps_z.hptr[t]);
 			ssigmaxind_sim_irf.hptr[i_world+t*nworlds] =
-				markovdiscrete(ssigmaxind_sim_irf.hptr[i_world+(t-1)*nworlds],CDF_ssigmax.hptr,nssigmax,innov_ssigmax.hptr[t]);
+				markovdiscrete(ssigmaxind_sim_irf.hptr[i_world+(t-1)*nworlds],CDF_ssigmax.hptr,nssigmax,eps_ssigmax.hptr[t]);
 			z_sim_irf.hptr[t] = h_z_grid[zind_sim_irf.hptr[t]];
 			ssigmax_sim_irf.hptr[t] = h_ssigmax_grid[ssigmaxind_sim_irf.hptr[t]];
 			for (int i_household = 0; i_household < nhousehold; i_household++) {
 				if (ssigmaxind_sim_irf.hptr[t-1]==0) {
-					xind_sim_irf[i_household+t*nhousehold] = markovdiscrete(xind_sim_irf[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+					xind_sim_irf[i_household+t*nhousehold] = markovdiscrete(xind_sim_irf[i_household+(t-1)*nhousehold],CDF_x_low.hptr,nx,eps_x.hptr[i_household+t*nhousehold]);
 				};
 				if (ssigmaxind_sim_irf.hptr[t-1]==1) {
 					xind_sim_irf[i_household+t*nhousehold] =
-						markovdiscrete(xind_sim_irf[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,innov_x.hptr[i_household+t*nhousehold]);
+						markovdiscrete(xind_sim_irf[i_household+(t-1)*nhousehold],CDF_x_high.hptr,nx,eps_x.hptr[i_household+t*nhousehold]);
 				};
 			};
 		};
@@ -1407,7 +1443,7 @@ int main(int argc, char ** argv)
 							q,
 							w,
 							mmu,
-							innov_match.dptr,
+							eps_match.dptr,
 							Kind_sim_irf[i_world+t*nworlds],
 							i_q,
 							zind_sim_irf.hvec[i_world+t*nworlds],
@@ -1446,7 +1482,7 @@ int main(int argc, char ** argv)
 						qmax,
 						w,
 						mmu,
-						innov_match.dptr,
+						eps_match.dptr,
 						Kind_sim_irf[i_world+t*nworlds],
 						i_qmax,
 						zind_sim_irf.hvec[i_world+t*nworlds],
@@ -1481,7 +1517,7 @@ int main(int argc, char ** argv)
 	save_vec(qind_sim_irf, "./results/qind_sim_irf.csv");
 	save_vec(q_sim_irf,    "./results/q_sim_irf.csv");
 	save_vec(C_sim_irf,    "./results/C_sim_irf.csv");
-	save_vec(ttheta_sim_irf,  "./results/mmu_sim_irf.csv");
+	save_vec(ttheta_sim_irf,  "./results/ttheta_sim_irf.csv");
 
 	// save ref results
 	save_vec(K_sim_ref,    "./results/K_sim_ref.csv");
@@ -1491,7 +1527,7 @@ int main(int argc, char ** argv)
 	save_vec(qind_sim_ref, "./results/qind_sim_ref.csv");
 	save_vec(q_sim_ref,    "./results/q_sim_ref.csv");
 	save_vec(C_sim_ref,    "./results/C_sim_ref.csv");
-	save_vec(ttheta_sim_ref,  "./results/mmu_sim_ref.csv");
+	save_vec(ttheta_sim_ref,  "./results/ttheta_sim_ref.csv");
 
 	// to be safe destroy cuBLAS handle
 	cublasDestroy(handle);
