@@ -10,7 +10,7 @@ ICUDA_MAC = /Developer/NVIDIA/CUDA-7.0/include
 ICPP_MAC  = /usr/local/include
 LCUDA     = /usr/local/cuda-7.0/lib64
 LCUDA_MAC = /Developer/NVIDIA/CUDA-7.0/lib
-LCPP_MAC  = /usr/local/lib
+LCPP_MAC  = /usr/lib
 
 SDIR = .
 IDIR = ./cudatools/include
