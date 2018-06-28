@@ -25,19 +25,20 @@ INCL+= -I$(IDIR)
 NVCC = nvcc
 
 # CUDA compiling options
-NVCCFLAGS  = -O2 -lineinfo -g -arch sm_30 -std=c++11
+NVCCFLAGS  = -O3 -lineinfo -g -std=c++11
 
 # Compiler for C code
 CXX = g++
 
 # Standard optimization flags to C++ compiler
-CXXFLAGS = -O2 -Wall -Wextra -pedantic-errors -O2 -std=c++11
+CXXFLAGS = -O3 -Wall -Wextra -pedantic-errors -std=c++11
 
 # Add CUDA libraries to C++ compiler linking process
 LDLIBS += -lcublas
 LDLIBS += -lcurand
 LDLIBS += -lcudart -lcudadevrt
-LDLIBS += -larmadillo -lopenblas -llapack
+LDLIBS += -larmadillo
+# LDLIBS += -larmadillo -lopenblas -llapack -larpack
 LDLIBS += -lcudatools
 LDLIBS += -L$(LCUDA) -L$(LCUDA_MAC) -L$(LCPP_MAC) -L$(LDIR)
 
